@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import firebase from 'firebase/compat/app';
 import { auth } from '../services/firebase';
 
 export function useAuth() {
-    const [user, setUser] = useState<User | null>(auth.currentUser);
+    // Fix: Use User type from firebase/compat/app
+    const [user, setUser] = useState<firebase.User | null>(auth.currentUser);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        // Fix: Use v8 compat API for onAuthStateChanged
+        const unsubscribe = auth.onAuthStateChanged((user) => {
             setUser(user);
             setLoading(false);
         });

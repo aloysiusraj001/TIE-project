@@ -1,5 +1,5 @@
 {
-  "name": "frontline-boost_v7_wl_ml",
+  "name": "frontline-boost_v9",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,7 +12,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@google/genai": "^1.27.0",
-    "firebase": "^12.4.0"
+    "firebase": "^12.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

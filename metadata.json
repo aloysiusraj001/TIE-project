@@ -1,5 +1,5 @@
 {
-  "name": "Frontline Boost_v7_wl_ml",
+  "name": "Frontline Boost_v9",
   "description": "An AI-powered conversational training tool for hotel frontline staff to practice handling various guest scenarios. It provides real-time interaction, detailed feedback reports, and progress tracking.",
   "requestFramePermissions": [
     "microphone"

@@ -1,14 +1,11 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { Report, TranscriptEntry, MentorFeedback } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const getAiInstance = () => {
-    return ai;
+    if (!process.env.API_KEY) {
+        throw new Error("API_KEY environment variable is not set");
+    }
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 const rubric = `
@@ -23,6 +20,7 @@ Pillar / Criterion	Excellent (4)	Good (3)	Developing (2)	Needs Improvement (1)
 
 
 export const generateTrainingReport = async (transcript: TranscriptEntry[]): Promise<Report> => {
+    const ai = getAiInstance();
     const conversation = transcript.map(entry => `${entry.speaker === 'user' ? 'Student' : 'AI Guest'}: ${entry.text}`).join('\n');
     
     const prompt = `
@@ -113,6 +111,7 @@ export const generateTrainingReport = async (transcript: TranscriptEntry[]): Pro
 };
 
 export const generateMentorFeedback = async (transcript: TranscriptEntry[]): Promise<MentorFeedback> => {
+    const ai = getAiInstance();
     const conversation = transcript.map(entry => `${entry.speaker === 'user' ? 'Student' : 'Guest'}: ${entry.text}`).join('\n');
     const lastUserUtterance = transcript.slice().reverse().find(e => e.speaker === 'user')?.text || '';
 

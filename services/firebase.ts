@@ -1,10 +1,10 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
+import "firebase/compat/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBTPu3MRQm_Bq7Ur3Mg7jEw77T97MBhzXE",
+  apiKey: "AIzaSyB2iGOUwaH3_2CnhubCkHRCoMr0HKtdYsM",
   authDomain: "gen-lang-client-0799007039.firebaseapp.com",
   projectId: "gen-lang-client-0799007039",
   storageBucket: "gen-lang-client-0799007039.firebasestorage.app",
@@ -13,8 +13,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
 
 // Export Firebase services
-export const auth = getAuth(app);
-export const firestore = getFirestore(app);
+export const auth = firebase.auth();
+export const firestore = firebase.firestore();

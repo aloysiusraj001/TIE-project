@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { Scenario, TranscriptEntry, Report, TrainingMode, MentorFeedback } from '../types';
-import { SCENARIOS } from '../constants';
+import { Scenario, TranscriptEntry, Report, TrainingMode, MentorFeedback, ScenarioCategory, Persona } from '../types';
 import { getAiInstance, generateTrainingReport, generateMentorFeedback } from '../services/geminiService';
 import { createBlob, decode, decodeAudioData } from '../services/audioUtils';
 import { MicIcon, StopIcon, BackIcon } from './icons';
@@ -11,40 +10,76 @@ import MentorPanel from './MentorPanel';
 
 interface TrainingViewProps {
   mode: TrainingMode;
-  initialScenario: Scenario | null;
-  onSessionComplete: (scenario: Scenario, transcript: TranscriptEntry[], report: Report) => void;
+  scenarios: Scenario[];
+  personas: Persona[];
+  categories: ScenarioCategory[];
+  initialScenarioId: string | null;
+  initialPersonaId: string | null;
+  onSessionComplete: (scenarioId: string, personaId: string, transcript: TranscriptEntry[], report: Report) => void;
   onBack: () => void;
 }
 
-const ScenarioSelector: React.FC<{ onSelect: (scenario: Scenario) => void; onBack: () => void; }> = ({ onSelect, onBack }) => {
+const ScenarioSelector: React.FC<{ 
+    scenarios: Scenario[]; 
+    categories: ScenarioCategory[];
+    onSelect: (scenario: Scenario) => void; 
+    onBack: () => void; 
+}> = ({ scenarios, categories, onSelect, onBack }) => {
     const { locale, t } = useLocale();
     return (
-        <div className="max-w-4xl mx-auto p-4 sm:p-8">
+        <div className="max-w-5xl mx-auto p-4 sm:p-8">
             <button onClick={onBack} className="flex items-center gap-2 mb-6 text-brand-light hover:text-white transition-colors">
                 <BackIcon className="w-6 h-6" />
                 <span>{t('backToDashboard')}</span>
             </button>
-            <h2 className="text-3xl font-bold text-center mb-8">{t('chooseScenario')}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {SCENARIOS.map((scenario) => (
-                <div
-                key={scenario.id}
-                className="bg-brand-secondary p-6 rounded-lg shadow-lg cursor-pointer hover:bg-brand-accent/50 transition-all transform hover:scale-105"
-                onClick={() => onSelect(scenario)}
-                >
-                <div className="flex items-center gap-4 mb-3">
-                    <span className="text-4xl">{scenario.avatar}</span>
-                    <h3 className="text-xl font-bold">{scenario.title[locale] || scenario.title.en}</h3>
-                </div>
-                <p className="text-brand-light">{scenario.description[locale] || scenario.description.en}</p>
-                </div>
-            ))}
+            <h1 className="text-3xl font-bold text-center mb-10">{t('chooseScenario')}</h1>
+            <div className="space-y-12">
+                {categories.map(category => (
+                    <div key={category.id}>
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-brand-accent">{category.title[locale] || category.title.en}</h2>
+                            <p className="text-brand-light mt-1">{category.description[locale] || category.description.en}</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {scenarios.filter(s => s.categoryId === category.id).map((scenario) => (
+                                <div
+                                    key={scenario.id}
+                                    className="bg-brand-secondary p-6 rounded-lg shadow-lg cursor-pointer hover:bg-brand-accent/50 transition-all transform hover:-translate-y-1"
+                                    onClick={() => onSelect(scenario)}
+                                >
+                                    <div className="flex items-center gap-4 mb-3">
+                                        <span className="text-4xl">{scenario.avatar}</span>
+                                        <h3 className="text-xl font-bold">{scenario.title[locale] || scenario.title.en}</h3>
+                                    </div>
+                                    <p className="text-brand-light text-sm">{scenario.description[locale] || scenario.description.en}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
 };
 
-const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenario, onComplete: (transcript: TranscriptEntry[]) => void, onBack: () => void }> = ({ mode, scenario, onComplete, onBack }) => {
+const createDynamicSystemInstruction = (scenario: Scenario, persona: Persona): string => {
+    const personaDetails = `
+    --- YOUR PERSONA ---
+    - Name: ${persona.name}
+    - Background: ${persona.background}
+    - Personality Traits: ${persona.personality_traits.join(', ')}
+    - Speaking Style: ${persona.speaking_style}
+    - Key Frustrations: ${persona.pain_points_challenges.join(', ')}
+    - Communication Style: ${persona.behaviors_habits.communication_preferences.join(', ')}
+    --- END OF PERSONA ---
+    `;
+    const personaEmbodimentInstruction = 'You must fully embody the persona details provided to you. Express feelings and reactions based on your character. Do not break character.';
+
+    return `${scenario.systemInstruction}\n\n${personaEmbodimentInstruction}\n\n${personaDetails}`;
+};
+
+
+const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenario, persona: Persona, onComplete: (transcript: TranscriptEntry[]) => void, onBack: () => void }> = ({ mode, scenario, persona, onComplete, onBack }) => {
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -97,6 +132,8 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
         setIsRecording(true);
         
         try {
+            const dynamicInstruction = createDynamicSystemInstruction(scenario, persona);
+
             const connectPromise = ai.current.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 callbacks: {
@@ -111,12 +148,10 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
                         }
 
                         if (message.serverContent?.turnComplete) {
-                            // FIX: Immediately clear the live utterance state to prevent "ghost" message bug.
                             setCurrentUserUtterance('');
                             const userText = currentInputTranscription.current.trim();
                             const aiText = currentOutputTranscription.current.trim();
                             
-                            // Clear refs for the next turn
                             currentInputTranscription.current = '';
                             currentOutputTranscription.current = '';
 
@@ -164,8 +199,8 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
                     responseModalities: [Modality.AUDIO],
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
-                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: scenario.persona.voice } } },
-                    systemInstruction: scenario.systemInstruction,
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: persona.voice } } },
+                    systemInstruction: dynamicInstruction,
                 },
             });
 
@@ -238,10 +273,10 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
     };
 
     const getGuestInitial = () => {
-        const name = scenario.persona.name;
+        const name = persona.name;
         if (!name) return 'G';
         const parts = name.split(' ');
-        if (parts.length > 1) { return parts[0][0] + parts[1][0]; }
+        if (parts.length > 1 && parts[0] && parts[1]) { return parts[0][0] + parts[1][0]; }
         return name[0];
     }
     
@@ -252,8 +287,8 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
         <div className="p-4 sm:p-8 max-w-full mx-auto h-[calc(100vh-120px)]">
              <div className={`grid grid-cols-1 ${gridColsClass} gap-8 h-full`}>
                 <div className="flex items-center justify-center bg-brand-secondary rounded-lg p-4 h-full">
-                    {scenario.videoAvatar ? (
-                        <video src={scenario.videoAvatar} autoPlay loop muted playsInline className="w-full h-full object-contain rounded-lg"/>
+                    {persona.videoAvatar ? (
+                        <video key={persona.videoAvatar} src={persona.videoAvatar} autoPlay loop muted playsInline className="w-full h-full object-contain rounded-lg"/>
                     ) : (
                         <div className="text-9xl">{scenario.avatar}</div>
                     )}
@@ -268,7 +303,7 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
                         <div className="text-end">
                             <h2 className="text-2xl font-bold">{scenario.title[locale] || scenario.title.en}</h2>
                             <p className="text-brand-light text-sm mt-1">
-                                {t('speakingWith', { name: scenario.persona.name })}
+                                {t('speakingWith', { name: persona.name })}
                             </p>
                         </div>
                     </div>
@@ -276,12 +311,12 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
                     <div ref={chatContainerRef} className="flex-grow bg-brand-secondary rounded-lg p-4 overflow-y-auto mb-4">
                         {transcript.length === 0 && !isRecording && !currentUserUtterance && (
                             <div className="flex items-center justify-center h-full text-center text-brand-light">
-                                <p>{t('startPrompt', { mode: modeText, name: scenario.persona.name })}</p>
+                                <p>{t('startPrompt', { mode: modeText, name: persona.name })}</p>
                             </div>
                         )}
                         {transcript.map((entry, index) => (
                             <div key={index} className={`flex items-start gap-3 my-3 ${entry.speaker === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                <div title={entry.speaker === 'user' ? 'Trainee' : scenario.persona.name} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${entry.speaker === 'user' ? 'bg-brand-light text-brand-primary' : 'bg-brand-accent/50 text-white'}`}>
+                                <div title={entry.speaker === 'user' ? 'Trainee' : persona.name} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${entry.speaker === 'user' ? 'bg-brand-light text-brand-primary' : 'bg-brand-accent/50 text-white'}`}>
                                     {entry.speaker === 'user' ? 'YOU' : getGuestInitial()}
                                 </div>
                                 <div className={`p-3 rounded-lg max-w-md ${entry.speaker === 'user' ? 'bg-brand-accent text-brand-primary' : 'bg-brand-accent/50 text-white'} ${entry.speaker === 'user' ? 'rounded-br-none' : 'rounded-bl-none'}`}>
@@ -335,54 +370,86 @@ const TrainingSessionComponent: React.FC<{ mode: TrainingMode; scenario: Scenari
 };
 
 
-const TrainingView: React.FC<TrainingViewProps> = ({ mode, initialScenario, onSessionComplete, onBack }) => {
-  const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(initialScenario);
+const TrainingView: React.FC<TrainingViewProps> = ({ mode, scenarios, personas, categories, initialScenarioId, initialPersonaId, onSessionComplete, onBack }) => {
+  const { t } = useLocale();
 
+  // State for the selected entities for the training session.
+  const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
+  const [activePersona, setActivePersona] = useState<Persona | null>(null);
+
+  // This effect runs once to set up the initial state for assessments.
   useEffect(() => {
-    // If an initial scenario is provided (for assessment), set it.
-    if (initialScenario) {
-        setSelectedScenario(initialScenario);
+    if (mode === TrainingMode.ASSESSMENT && initialScenarioId && initialPersonaId) {
+      const scenario = scenarios.find(s => s.id === initialScenarioId);
+      const persona = personas.find(p => p.id === initialPersonaId);
+      if (scenario && persona) {
+        setActiveScenario(scenario);
+        setActivePersona(persona);
+      }
     }
-  }, [initialScenario]);
-  
+  }, [mode, initialScenarioId, initialPersonaId, scenarios, personas]);
 
   const handleScenarioSelect = (scenario: Scenario) => {
-    setSelectedScenario(scenario);
+    if (scenario.personaId) {
+      const persona = personas.find(p => p.id === scenario.personaId);
+      if (persona) {
+        setActiveScenario(scenario);
+        setActivePersona(persona);
+      } else {
+        // Data integrity error, persona assigned in admin doesn't exist.
+        alert(t('error.personaNotFoundForScenario'));
+      }
+    } else {
+      // Admin hasn't assigned a persona to this scenario.
+      alert(t('error.noPersonaAssignedToScenario'));
+    }
   };
 
   const handleSessionCompletion = async (transcript: TranscriptEntry[]) => {
-    if (!selectedScenario) return;
+    if (!activeScenario || !activePersona) return;
     const report = await generateTrainingReport(transcript);
-    onSessionComplete(
-      selectedScenario,
-      transcript,
-      report
-    );
+    onSessionComplete(activeScenario.id, activePersona.id, transcript, report);
   };
-  
-  const handleBack = () => {
-    // In assessment mode, back always goes to dashboard.
-    // In mentoring mode, it goes back to scenario selection first.
-    if (mode === TrainingMode.ASSESSMENT || !selectedScenario) {
-        onBack();
+
+  const handleBackFromSession = () => {
+    if (mode === TrainingMode.MENTORING) {
+      // In mentoring mode, go back to the scenario selector.
+      setActiveScenario(null);
+      setActivePersona(null);
     } else {
-        setSelectedScenario(null);
+      // In assessment mode, go back to the dashboard.
+      onBack();
     }
-  }
+  };
 
-  if (!selectedScenario) {
-    // This only shows in MENTORING mode if no scenario is selected yet.
-    return <ScenarioSelector onSelect={handleScenarioSelect} onBack={onBack} />;
-  }
+  const isSessionReady = activeScenario && activePersona;
 
-  return (
+  if (isSessionReady) {
+    return (
       <TrainingSessionComponent 
         mode={mode}
-        scenario={selectedScenario} 
+        scenario={activeScenario} 
+        persona={activePersona}
         onComplete={handleSessionCompletion} 
-        onBack={handleBack}
+        onBack={handleBackFromSession}
       />
-  );
+    );
+  }
+
+  // If session is not ready, and it's mentoring mode, show selector.
+  if (mode === TrainingMode.MENTORING) {
+    return (
+      <ScenarioSelector 
+        scenarios={scenarios} 
+        categories={categories} 
+        onSelect={handleScenarioSelect} 
+        onBack={onBack} 
+      />
+    );
+  }
+
+  // Otherwise (assessment mode waiting for effect), show nothing or a loader.
+  return null;
 };
 
 export default TrainingView;

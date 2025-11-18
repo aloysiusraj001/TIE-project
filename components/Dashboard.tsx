@@ -1,10 +1,11 @@
 import React from 'react';
-import { TrainingSession } from '../types';
+import { TrainingSession, ScenarioCategory } from '../types';
 import { ReportIcon, MicIcon } from './icons';
 import { useLocale } from '../context/LocaleContext';
 
 interface DashboardProps {
   sessions: TrainingSession[];
+  categories: ScenarioCategory[];
   onStartNewTraining: () => void;
   onViewReport: (session: TrainingSession) => void;
   hasCompletedAssessment: boolean;
@@ -26,12 +27,14 @@ const PerformanceSummary: React.FC<{ sessions: TrainingSession[] }> = ({ session
 
     const pillarScores: { [key: string]: number[] } = {};
     sessions.forEach(session => {
-        session.report.pillars.forEach(p => {
-            if (!pillarScores[p.pillar]) {
-                pillarScores[p.pillar] = [];
-            }
-            pillarScores[p.pillar].push(p.score);
-        });
+        if (session.report && session.report.pillars) {
+            session.report.pillars.forEach(p => {
+                if (!pillarScores[p.pillar]) {
+                    pillarScores[p.pillar] = [];
+                }
+                pillarScores[p.pillar].push(p.score);
+            });
+        }
     });
 
     const summaryData = pillarOrder.map(pillarKey => {
@@ -68,23 +71,32 @@ const PerformanceSummary: React.FC<{ sessions: TrainingSession[] }> = ({ session
 };
 
 
-const SessionCard: React.FC<{ session: TrainingSession; onClick: () => void }> = ({ session, onClick }) => {
+const SessionCard: React.FC<{ session: TrainingSession; onClick: () => void, categories: ScenarioCategory[] }> = ({ session, onClick, categories }) => {
     const { locale, t } = useLocale();
+    if (!session.scenario) return null; // Don't render if scenario data is missing
+
+    const category = categories.find(c => c.id === session.scenario.categoryId);
+
     return (
         <div 
-            className="bg-brand-secondary p-4 rounded-lg shadow-lg hover:bg-brand-accent/50 transition-colors cursor-pointer flex justify-between items-center"
+            className="bg-brand-secondary p-4 rounded-lg shadow-lg hover:bg-brand-accent/50 transition-colors cursor-pointer"
             onClick={onClick}
         >
-            <div>
-                <div className="flex items-center gap-3">
-                    <span className="text-3xl">{session.scenario.avatar}</span>
-                    <h3 className="text-lg font-bold text-brand-text">{session.scenario.title[locale] || session.scenario.title.en}</h3>
+            <div className="flex justify-between items-start">
+                <div>
+                    {category && (
+                         <p className="text-xs font-bold uppercase text-brand-accent tracking-wider mb-1">{category.title[locale] || category.title.en}</p>
+                    )}
+                    <div className="flex items-center gap-3">
+                        <span className="text-3xl">{session.scenario.avatar}</span>
+                        <h3 className="text-lg font-bold text-brand-text">{session.scenario.title[locale] || session.scenario.title.en}</h3>
+                    </div>
+                    <p className="text-sm text-brand-light mt-1 ps-10">{new Date(session.date).toLocaleString(locale)}</p>
                 </div>
-                <p className="text-sm text-brand-light mt-1">{new Date(session.date).toLocaleString(locale)}</p>
-            </div>
-            <div className="flex items-center gap-2 text-brand-light hover:text-white">
-                <span>{t('viewReport')}</span>
-                <ReportIcon className="w-5 h-5" />
+                <div className="flex items-center gap-2 text-brand-light hover:text-white mt-1 flex-shrink-0">
+                    <span>{t('viewReport')}</span>
+                    <ReportIcon className="w-5 h-5" />
+                </div>
             </div>
         </div>
     );
@@ -109,7 +121,7 @@ const InitialAssessmentCard: React.FC<{ onStart: () => void }> = ({ onStart }) =
     );
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ sessions, onStartNewTraining, onViewReport, hasCompletedAssessment, onStartInitialAssessment }) => {
+const Dashboard: React.FC<DashboardProps> = ({ sessions, categories, onStartNewTraining, onViewReport, hasCompletedAssessment, onStartInitialAssessment }) => {
   const { t } = useLocale();
   const sortedSessions = [...sessions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -140,7 +152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ sessions, onStartNewTraining, onV
         <div className="space-y-4">
             {sortedSessions.length > 0 ? (
             sortedSessions.map((session) => (
-                <SessionCard key={session.id} session={session} onClick={() => onViewReport(session)} />
+                <SessionCard key={session.id} session={session} onClick={() => onViewReport(session)} categories={categories} />
             ))
             ) : (
             <div className="text-center py-16 bg-brand-secondary rounded-lg">

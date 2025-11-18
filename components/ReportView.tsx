@@ -15,7 +15,7 @@ const TranscriptBubble: React.FC<{ entry: TranscriptEntry; personaName: string; 
     const getGuestInitial = () => {
         if (!personaName) return 'G';
         const parts = personaName.split(' ');
-        if (parts.length > 1 && parts[0][0] && parts[1][0]) {
+        if (parts.length > 1 && parts[0] && parts[1]) {
             return parts[0][0] + parts[1][0];
         }
         return personaName[0] || 'G';
@@ -59,7 +59,17 @@ const PillarFeedbackCard: React.FC<{ pillarData: PillarFeedback }> = ({ pillarDa
 
 const ReportView: React.FC<ReportViewProps> = ({ session, onBack }) => {
   const { locale, t } = useLocale();
-  
+  const { scenario, persona } = session;
+
+  if (!scenario || !persona) {
+    return (
+      <div className="p-8 text-center">
+        <p>Loading session data...</p>
+        <button onClick={onBack}>Back</button>
+      </div>
+    )
+  }
+
   // Define the desired order of pillars for the chart
   const pillarOrder = [
     "pillar.full.empathy",
@@ -96,9 +106,9 @@ const ReportView: React.FC<ReportViewProps> = ({ session, onBack }) => {
 
       <div className="bg-brand-secondary p-6 rounded-lg shadow-xl">
         <div className="flex items-center gap-4 border-b border-brand-accent/30 pb-4 mb-6">
-            <span className="text-5xl">{session.scenario.avatar}</span>
+            <span className="text-5xl">{scenario.avatar}</span>
             <div>
-                <h1 className="text-3xl font-bold">{session.scenario.title[locale] || session.scenario.title.en}</h1>
+                <h1 className="text-3xl font-bold">{scenario.title[locale] || scenario.title.en}</h1>
                 <p className="text-brand-light">{new Date(session.date).toLocaleString(locale)}</p>
             </div>
         </div>
@@ -129,7 +139,7 @@ const ReportView: React.FC<ReportViewProps> = ({ session, onBack }) => {
         <div className="mt-8 border-t border-brand-accent/30 pt-6">
           <h2 className="text-2xl font-semibold mb-2">{t('conversationTranscript')}</h2>
           <div className="bg-brand-primary p-4 rounded-lg h-96 overflow-y-auto">
-            {session.transcript.map((entry, index) => <TranscriptBubble key={index} entry={entry} personaName={session.scenario.persona.name} />)}
+            {session.transcript.map((entry, index) => <TranscriptBubble key={index} entry={entry} personaName={persona.name} />)}
           </div>
         </div>
       </div>

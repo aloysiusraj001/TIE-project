@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Academic design system — deep navy + slate, warm parchment background */
+@layer base {
+  :root {
+    --background: 210 33% 98%;
+    --foreground: 215 35% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 35% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 35% 15%;
+
+    --primary: 217 60% 22%;
+    --primary-foreground: 210 33% 98%;
+    --primary-glow: 217 70% 38%;
+
+    --secondary: 215 25% 94%;
+    --secondary-foreground: 217 60% 22%;
+
+    --muted: 215 25% 95%;
+    --muted-foreground: 215 16% 45%;
+
+    --accent: 188 70% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 152 55% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 35 90% 48%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 48%;
+    --destructive-foreground: 210 33% 98%;
+
+    --border: 215 25% 88%;
+    --input: 215 25% 90%;
+    --ring: 217 60% 22%;
+
+    --radius: 0.625rem;
+
+    --gradient-hero: linear-gradient(135deg, hsl(217 60% 22%) 0%, hsl(217 70% 32%) 50%, hsl(188 60% 32%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(210 33% 99%) 0%, hsl(215 25% 96%) 100%);
+    --shadow-elegant: 0 10px 30px -12px hsl(217 60% 22% / 0.18);
+    --shadow-card: 0 1px 3px hsl(215 35% 15% / 0.05), 0 4px 12px hsl(215 35% 15% / 0.04);
+    --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 217 60% 22%;
+    --sidebar-foreground: 210 33% 92%;
+    --sidebar-primary: 188 70% 45%;
+    --sidebar-primary-foreground: 217 60% 12%;
+    --sidebar-accent: 217 55% 28%;
+    --sidebar-accent-foreground: 210 33% 98%;
+    --sidebar-border: 217 50% 30%;
+    --sidebar-ring: 188 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif tracking-tight;
+  }
+}
+
+@layer components {
+  .academic-card {
+    @apply bg-card rounded-lg border border-border shadow-[var(--shadow-card)] transition-[var(--transition-smooth)];
+  }
+  .academic-card:hover {
+    @apply shadow-[var(--shadow-elegant)];
+  }
+}

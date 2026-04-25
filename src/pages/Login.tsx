@@ -2,7 +2,13 @@ import { useApp } from "@/data/store";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { GraduationCap, ShieldCheck, BookOpen, Users } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { isValidDemoPassword } from "@/data/demoAuth";
+import { firebaseAuth } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 const roleMeta = {
   admin: { label: "Administrator", icon: ShieldCheck, blurb: "Full access — manage users, courses, and projects." },
@@ -12,8 +18,13 @@ const roleMeta = {
 
 const Login = () => {
   const users = useApp((s) => s.users);
-  const login = useApp((s) => s.login);
   const navigate = useNavigate();
+  const pwRef = useRef<HTMLInputElement | null>(null);
+  const [password, setPassword] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const canLogin = useMemo(() => isValidDemoPassword(password), [password]);
 
   const grouped = {
     admin: users.filter((u) => u.role === "admin"),
@@ -21,9 +32,22 @@ const Login = () => {
     student: users.filter((u) => u.role === "student"),
   };
 
-  const handle = (id: string, role: string) => {
-    login(id);
-    navigate(`/${role}`);
+  const handle = async (email: string, role: string) => {
+    if (!canLogin) {
+      setPwError("Wrong password. Use the shared demo password.");
+      pwRef.current?.focus();
+      return;
+    }
+    setPwError(null);
+    try {
+      setBusy(true);
+      await signInWithEmailAndPassword(firebaseAuth, email, password);
+      navigate(`/${role}`);
+    } catch {
+      setPwError("Sign-in failed. Make sure this email exists in Firebase Auth with the shared password.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -50,6 +74,39 @@ const Login = () => {
             </p>
           </div>
 
+          <Card className="academic-card mb-6 p-6">
+            <div className="grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
+              <Label htmlFor="demo-password" className="text-sm font-medium text-foreground">
+                Demo password (same for all accounts)
+              </Label>
+              <div className="space-y-2">
+                <Input
+                  id="demo-password"
+                  ref={pwRef}
+                  type="password"
+                  placeholder="Enter demo password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (pwError) setPwError(null);
+                  }}
+                />
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs text-muted-foreground">
+                    Password for all demo logins: <span className="font-medium text-foreground">demo</span>
+                  </p>
+                  {pwError ? (
+                    <p className="text-xs font-medium text-destructive">{pwError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {canLogin ? "Unlocked" : "Locked until password is correct"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <div className="grid gap-6 lg:grid-cols-3">
             {(Object.keys(grouped) as Array<keyof typeof grouped>).map((role) => {
               const Meta = roleMeta[role];
@@ -71,7 +128,9 @@ const Login = () => {
                         key={u.id}
                         variant="outline"
                         className="h-auto justify-start gap-3 border-border py-3 text-left hover:border-primary hover:bg-secondary"
-                        onClick={() => handle(u.id, role)}
+                        onClick={() => void handle(u.email, role)}
+                        aria-disabled={!canLogin}
+                        disabled={!canLogin || busy}
                       >
                         <span
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-primary-foreground"

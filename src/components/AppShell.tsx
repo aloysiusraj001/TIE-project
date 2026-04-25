@@ -13,14 +13,13 @@ interface AppShellProps {
 
 const AppShell = ({ nav, children, roleLabel }: AppShellProps) => {
   const user = useApp((s) => s.users.find((u) => u.id === s.currentUserId));
-  const logout = useApp((s) => s.logout);
+  const signOut = useApp((s) => s.signOut);
   const navigate = useNavigate();
 
   if (!user) return null;
 
   const handleLogout = () => {
-    logout();
-    navigate("/");
+    void signOut().finally(() => navigate("/"));
   };
 
   return (

@@ -22,6 +22,20 @@ ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY \
     VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID \
     VITE_FIREBASE_MEASUREMENT_ID=$VITE_FIREBASE_MEASUREMENT_ID
 
+# Fail fast if build args are missing, empty, or accidentally set to a literal like "$VITE_..." in Secret Manager.
+RUN set -e; \
+  for v in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_STORAGE_BUCKET VITE_FIREBASE_MESSAGING_SENDER_ID VITE_FIREBASE_APP_ID; do \
+    x="$(printenv $v 2>/dev/null || true)"; \
+    if [ -z "$x" ] || printf '%s' "$x" | grep -qE '^\$VITE_'; then \
+      echo "ERROR: Secret/env $v is missing/invalid. It must be the *actual* value (e.g. apiKey), not a placeholder string like '\$VITE_...'."; \
+      exit 1; \
+    fi; \
+  done; \
+  if [ -n "${VITE_FIREBASE_MEASUREMENT_ID:-}" ] && printf '%s' "$VITE_FIREBASE_MEASUREMENT_ID" | grep -qE '^\$VITE_'; then \
+    echo "ERROR: VITE_FIREBASE_MEASUREMENT_ID looks like a placeholder."; \
+    exit 1; \
+  fi
+
 RUN npm run build
 
 # Stage 2: Serve with nginx

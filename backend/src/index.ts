@@ -95,7 +95,8 @@ app.post("/admin/users", requireFirebaseAuth, requireAdminRole, async (req, res)
 // Serve built frontend from the same Cloud Run service (optional but recommended).
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const staticDir = path.resolve(__dirname, "../../public");
+// When compiled, this file lives at backend/dist/index.js. The frontend build is copied to backend/public/.
+const staticDir = path.resolve(__dirname, "../public");
 app.use(express.static(staticDir));
 app.get("*", (_req, res) => {
   res.sendFile(path.join(staticDir, "index.html"));

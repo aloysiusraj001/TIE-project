@@ -21,6 +21,7 @@ const Login = () => {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
+  const [magicLinkDetected, setMagicLinkDetected] = useState(false);
 
   const backendUrlRaw = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
   const backendUrl = backendUrlRaw === "." || backendUrlRaw === "/" ? window.location.origin : backendUrlRaw;
@@ -37,31 +38,39 @@ const Login = () => {
     });
   };
 
-  useEffect(() => {
-    // Complete magic-link sign-in if this page is opened from an email link.
-    if (!isSignInWithEmailLink(firebaseAuth, window.location.href)) return;
-
+  const completeMagicLink = async () => {
     const storedEmail = window.localStorage.getItem("magicLinkEmail") ?? "";
     const effectiveEmail = (email || storedEmail).trim();
     if (!effectiveEmail) {
-      setError("Enter the email you used for the magic link, then try again.");
+      setError("Enter the email you used for the magic link.");
       return;
     }
 
-    (async () => {
-      setBusy(true);
-      setError(null);
-      try {
-        await signInWithEmailLink(firebaseAuth, effectiveEmail, window.location.href);
-        window.localStorage.removeItem("magicLinkEmail");
-        await ensureUserRow();
-        navigate("/");
-      } catch {
-        setError("Magic link sign-in failed. Try requesting a new link.");
-      } finally {
-        setBusy(false);
-      }
-    })();
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithEmailLink(firebaseAuth, effectiveEmail, window.location.href);
+      window.localStorage.removeItem("magicLinkEmail");
+      await ensureUserRow();
+      navigate("/");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Magic link sign-in failed.";
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    // If this page is opened from a magic-link, we may need the user to type their email
+    // (e.g. link opened on a different device/browser with no localStorage state).
+    if (!isSignInWithEmailLink(firebaseAuth, window.location.href)) return;
+    setMagicLinkDetected(true);
+
+    // Best-effort auto-complete when email is available from localStorage.
+    const storedEmail = window.localStorage.getItem("magicLinkEmail") ?? "";
+    if (storedEmail && !email) setEmail(storedEmail);
+    if (storedEmail) void completeMagicLink();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -97,8 +106,9 @@ const Login = () => {
       window.localStorage.setItem("magicLinkEmail", e);
       setMagicSent(true);
       toast.success("Magic link sent. Check your email.");
-    } catch {
-      setError("Could not send magic link. Check Firebase Auth settings for Email Link sign-in.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not send magic link.";
+      setError(`${msg} Check Firebase Auth settings for Email Link sign-in.`);
     } finally {
       setBusy(false);
     }
@@ -170,6 +180,11 @@ const Login = () => {
                   We emailed you a sign-in link. Open it on the same device/browser.
                 </p>
               ) : null}
+              {magicLinkDetected ? (
+                <p className="text-sm text-muted-foreground">
+                  Magic link detected. If you opened the link on a different device/browser, re-enter your email then click “Complete sign-in”.
+                </p>
+              ) : null}
 
               <Button
                 className="w-full"
@@ -185,8 +200,18 @@ const Login = () => {
                 onClick={() => void handleMagicLink()}
                 disabled={busy || !email.trim()}
               >
-                {busy ? "Sending..." : "Email me a magic link (student sign up)"}
+                {busy ? "Sending..." : "Email me a magic link (sign up)"}
               </Button>
+
+              {magicLinkDetected ? (
+                <Button
+                  className="w-full"
+                  onClick={() => void completeMagicLink()}
+                  disabled={busy || !email.trim()}
+                >
+                  {busy ? "Completing..." : "Complete sign-in"}
+                </Button>
+              ) : null}
             </div>
           </Card>
         </div>

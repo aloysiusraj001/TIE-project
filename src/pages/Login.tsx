@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GraduationCap } from "lucide-react";
 import { useRef, useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -35,12 +34,12 @@ const Login = () => {
       <div className="container mx-auto px-6 py-12 lg:py-20">
         <div className="mx-auto max-w-xl">
           <div className="mb-12 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-hero text-primary-foreground shadow-elegant">
-              <GraduationCap className="h-6 w-6" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg shadow-elegant">
+              <img src="/favicon.svg" alt="Project Tracking" className="h-11 w-11" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">Track Studio</h1>
-              <p className="text-sm text-muted-foreground">Student project tracking — Spring 2026</p>
+              <h1 className="text-2xl font-semibold text-foreground">Project Tracking</h1>
+              <p className="text-sm text-muted-foreground">Student project tracking</p>
             </div>
           </div>
 
@@ -48,9 +47,6 @@ const Login = () => {
             <h2 className="mb-2 text-4xl font-semibold leading-tight text-foreground lg:text-5xl">
               Sign in to continue
             </h2>
-            <p className="max-w-2xl text-muted-foreground">
-              Use your email and password. Accounts are managed in Firebase Authentication.
-            </p>
           </div>
 
           <Card className="academic-card p-6">

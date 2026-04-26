@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useApp } from "@/data/store";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -26,11 +26,11 @@ const AppShell = ({ nav, children, roleLabel }: AppShellProps) => {
     <div className="flex min-h-screen bg-gradient-subtle">
       <aside className="hidden w-64 flex-col bg-sidebar text-sidebar-foreground lg:flex">
         <div className="flex items-center gap-2 px-6 py-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-            <GraduationCap className="h-5 w-5" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-md">
+            <img src="/favicon.svg" alt="Project Tracking" className="h-9 w-9" />
           </div>
           <div>
-            <div className="font-serif text-lg font-semibold leading-tight">Track Studio</div>
+            <div className="font-serif text-lg font-semibold leading-tight">Project Tracking</div>
             <div className="text-[11px] uppercase tracking-wider text-sidebar-foreground/60">{roleLabel}</div>
           </div>
         </div>
@@ -83,7 +83,7 @@ const AppShell = ({ nav, children, roleLabel }: AppShellProps) => {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-card px-6 py-4 lg:hidden">
           <Link to="/" className="flex items-center gap-2 font-serif font-semibold">
-            <GraduationCap className="h-5 w-5 text-primary" /> Track Studio
+            <img src="/favicon.svg" alt="Project Tracking" className="h-5 w-5" /> Project Tracking
           </Link>
           <Button size="sm" variant="ghost" onClick={handleLogout}>
             <LogOut className="h-4 w-4" />

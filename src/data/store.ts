@@ -71,6 +71,8 @@ const palette = [
   "0 70% 48%",
 ];
 
+const backendUrl = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
+
 export const useApp = create<AppState>()((set, get) => {
   let unsubAuth: Unsubscribe | null = null;
   let unsubs: Unsubscribe[] = [];
@@ -162,6 +164,22 @@ export const useApp = create<AppState>()((set, get) => {
 
     // admin
     addUser: async (u) => {
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const res = await fetch(`${backendUrl.replace(/\/$/, "")}/admin/users`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(u),
+        });
+        if (!res.ok) throw new Error("Backend user create failed");
+        return;
+      }
+
+      // Fallback for local dev / permissive rules.
       const id = uid("u");
       const avatarColor = palette[get().users.length % palette.length];
       await setDoc(doc(firestore, "users", id), { ...u, id, avatarColor } satisfies User);

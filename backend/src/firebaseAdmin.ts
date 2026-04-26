@@ -20,3 +20,7 @@ export function getAdminApp() {
 export function getAuth() {
   return getAdminApp().auth();
 }
+
+export function getFirestore() {
+  return getAdminApp().firestore();
+}

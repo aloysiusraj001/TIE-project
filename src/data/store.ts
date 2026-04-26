@@ -359,9 +359,28 @@ export const useApp = create<AppState>()((set, get) => {
     // updates
     submitUpdate: (u) => {
       const id = uid("w");
+      const thisWeekGoals = (u.thisWeekGoals ?? []).map((g) => ({
+        id: g.id,
+        text: g.text,
+        achieved: g.achieved,
+        ...(g.reason?.trim() ? { reason: g.reason } : {}),
+      }));
+      const nextWeekGoals = (u.nextWeekGoals ?? []).map((g) => ({
+        id: g.id,
+        text: g.text,
+        achieved: g.achieved ?? null,
+        ...(g.reason?.trim() ? { reason: g.reason } : {}),
+      }));
+      const links = (u.links ?? []).map((l) => ({ id: l.id, label: l.label, url: l.url }));
+
       const payload: WeeklyUpdate = {
         ...u,
         id,
+        blockers: (u.blockers ?? "").toString(),
+        progress: Number.isFinite(u.progress) ? u.progress : 0,
+        thisWeekGoals,
+        nextWeekGoals,
+        links,
         submittedAt: new Date().toISOString(),
         status: "pending",
         comments: [],

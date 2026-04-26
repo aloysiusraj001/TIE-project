@@ -29,6 +29,7 @@ const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 9)}`;
 interface AppState {
   initialized: boolean;
   authReady: boolean;
+  usersReady: boolean;
   currentUserId: string | null;
 
   users: User[];
@@ -97,7 +98,7 @@ export const useApp = create<AppState>()((set, get) => {
     unsubs.push(
       onSnapshot(collection(firestore, "users"), (snap) => {
         const users = snap.docs.map((d) => d.data() as User);
-        set({ users });
+        set({ users, usersReady: true });
         const email = firebaseAuth.currentUser?.email;
         if (email) {
           const u = users.find((x) => x.email.toLowerCase() === email.toLowerCase());
@@ -125,6 +126,7 @@ export const useApp = create<AppState>()((set, get) => {
   return {
     initialized: false,
     authReady: false,
+    usersReady: false,
     currentUserId: null,
 
     users: [],
@@ -142,7 +144,7 @@ export const useApp = create<AppState>()((set, get) => {
         if (!fbUser?.email) {
           unsubs.forEach((u) => u());
           unsubs = [];
-          set({ currentUserId: null });
+          set({ currentUserId: null, usersReady: false });
           return;
         }
 
@@ -212,12 +214,53 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     addCourse: async (c) => {
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/courses`;
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(c),
+        });
+        if (!res.ok) {
+          let detail = "";
+          try {
+            const data = (await res.json()) as { error?: string };
+            detail = data?.error ? `: ${data.error}` : "";
+          } catch {
+            // ignore
+          }
+          throw new Error(`Backend course create failed (${res.status})${detail}`);
+        }
+        return;
+      }
+
       const id = uid("c");
       await setDoc(doc(firestore, "courses", id), { ...c, id } satisfies Course);
     },
     assignInstructor: async (courseId, instructorId) => {
       const course = get().courses.find((c) => c.id === courseId);
       if (!course || course.instructorIds.includes(instructorId)) return;
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/courses/${encodeURIComponent(courseId)}/instructors`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ instructorId, op: "add" }),
+        });
+        if (!res.ok) throw new Error(`Backend assign instructor failed (${res.status})`);
+        return;
+      }
+
       await updateDoc(doc(firestore, "courses", courseId), {
         instructorIds: [...course.instructorIds, instructorId],
       });
@@ -225,18 +268,66 @@ export const useApp = create<AppState>()((set, get) => {
     removeInstructor: async (courseId, instructorId) => {
       const course = get().courses.find((c) => c.id === courseId);
       if (!course) return;
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/courses/${encodeURIComponent(courseId)}/instructors`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ instructorId, op: "remove" }),
+        });
+        if (!res.ok) throw new Error(`Backend remove instructor failed (${res.status})`);
+        return;
+      }
+
       await updateDoc(doc(firestore, "courses", courseId), {
         instructorIds: course.instructorIds.filter((i) => i !== instructorId),
       });
     },
 
     addProject: async (p) => {
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/projects`;
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(p),
+        });
+        if (!res.ok) throw new Error(`Backend project create failed (${res.status})`);
+        return;
+      }
+
       const id = uid("p");
       await setDoc(doc(firestore, "projects", id), { ...p, id, progress: 0 } satisfies Project);
     },
     assignStudentToProject: async (projectId, studentId) => {
       const project = get().projects.find((p) => p.id === projectId);
       if (!project || project.studentIds.includes(studentId)) return;
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/projects/${encodeURIComponent(projectId)}/students`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ studentId, op: "add" }),
+        });
+        if (!res.ok) throw new Error(`Backend assign student failed (${res.status})`);
+        return;
+      }
+
       await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: [...project.studentIds, studentId],
       });
@@ -244,6 +335,22 @@ export const useApp = create<AppState>()((set, get) => {
     removeStudentFromProject: async (projectId, studentId) => {
       const project = get().projects.find((p) => p.id === projectId);
       if (!project) return;
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/projects/${encodeURIComponent(projectId)}/students`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ studentId, op: "remove" }),
+        });
+        if (!res.ok) throw new Error(`Backend remove student failed (${res.status})`);
+        return;
+      }
+
       await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: project.studentIds.filter((i) => i !== studentId),
       });

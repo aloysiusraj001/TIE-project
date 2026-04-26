@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 function requireEnv(name: string) {
@@ -25,4 +25,9 @@ const firebaseConfig = {
 export const firebaseApp = initializeApp(firebaseConfig);
 export const firebaseAuth = getAuth(firebaseApp);
 export const firestore = getFirestore(firebaseApp);
+
+// Ensure sessions survive refresh/browser restart for all roles.
+void setPersistence(firebaseAuth, browserLocalPersistence).catch(() => {
+  // Some environments (e.g. blocked third-party storage) may reject persistence.
+});
 

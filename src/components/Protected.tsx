@@ -5,8 +5,10 @@ import { useApp } from "@/data/store";
 
 const Protected = ({ role, children }: { role: Role; children: ReactNode }) => {
   const authReady = useApp((s) => s.authReady);
+  const usersReady = useApp((s) => s.usersReady);
   const user = useApp((s) => s.users.find((u) => u.id === s.currentUserId));
   if (!authReady) return null;
+  if (!usersReady) return null;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) return <Navigate to={`/${user.role}`} replace />;
   return <>{children}</>;

@@ -92,6 +92,95 @@ app.post("/admin/users", requireFirebaseAuth, requireAdminRole, async (req, res)
   return res.json({ ok: true, id });
 });
 
+app.post("/admin/courses", requireFirebaseAuth, requireAdminRole, async (req, res) => {
+  const { code, name, term } = (req.body ?? {}) as { code?: string; name?: string; term?: string };
+  if (!code?.trim() || !name?.trim() || !term?.trim()) {
+    return res.status(400).json({ error: "code, name, and term are required" });
+  }
+
+  const id = uid("c");
+  const db = getFirestore();
+  await db.collection("courses").doc(id).set({
+    id,
+    code: code.trim(),
+    name: name.trim(),
+    term: term.trim(),
+    instructorIds: [],
+  });
+
+  return res.json({ ok: true, id });
+});
+
+app.post("/admin/projects", requireFirebaseAuth, requireAdminRole, async (req, res) => {
+  const { name, description, courseId, studentIds } = (req.body ?? {}) as {
+    name?: string;
+    description?: string;
+    courseId?: string;
+    studentIds?: unknown;
+  };
+  if (!name?.trim() || !courseId?.trim()) {
+    return res.status(400).json({ error: "name and courseId are required" });
+  }
+  const students = Array.isArray(studentIds) ? (studentIds.filter((x) => typeof x === "string") as string[]) : [];
+
+  const id = uid("p");
+  const db = getFirestore();
+  await db.collection("projects").doc(id).set({
+    id,
+    name: name.trim(),
+    description: (description ?? "").toString(),
+    courseId: courseId.trim(),
+    studentIds: students,
+    progress: 0,
+  });
+
+  return res.json({ ok: true, id });
+});
+
+app.patch("/admin/courses/:id/instructors", requireFirebaseAuth, requireAdminRole, async (req, res) => {
+  const courseId = req.params.id;
+  const { instructorId, op } = (req.body ?? {}) as { instructorId?: string; op?: "add" | "remove" };
+  if (!courseId?.trim() || !instructorId?.trim() || (op !== "add" && op !== "remove")) {
+    return res.status(400).json({ error: "courseId, instructorId, and op(add|remove) are required" });
+  }
+
+  const db = getFirestore();
+  const ref = db.collection("courses").doc(courseId.trim());
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Course not found" });
+
+  const instructorIds = (snap.get("instructorIds") as string[] | undefined) ?? [];
+  const next =
+    op === "add"
+      ? Array.from(new Set([...instructorIds, instructorId.trim()]))
+      : instructorIds.filter((i) => i !== instructorId.trim());
+
+  await ref.update({ instructorIds: next });
+  return res.json({ ok: true });
+});
+
+app.patch("/admin/projects/:id/students", requireFirebaseAuth, requireAdminRole, async (req, res) => {
+  const projectId = req.params.id;
+  const { studentId, op } = (req.body ?? {}) as { studentId?: string; op?: "add" | "remove" };
+  if (!projectId?.trim() || !studentId?.trim() || (op !== "add" && op !== "remove")) {
+    return res.status(400).json({ error: "projectId, studentId, and op(add|remove) are required" });
+  }
+
+  const db = getFirestore();
+  const ref = db.collection("projects").doc(projectId.trim());
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Project not found" });
+
+  const studentIds = (snap.get("studentIds") as string[] | undefined) ?? [];
+  const next =
+    op === "add"
+      ? Array.from(new Set([...studentIds, studentId.trim()]))
+      : studentIds.filter((i) => i !== studentId.trim());
+
+  await ref.update({ studentIds: next });
+  return res.json({ ok: true });
+});
+
 // Serve built frontend from the same Cloud Run service (optional but recommended).
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

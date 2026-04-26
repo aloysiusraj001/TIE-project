@@ -28,6 +28,7 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
   const addComment = useApp((s) => s.addComment);
   const currentUserId = useApp((s) => s.currentUserId)!;
   const project = useApp((s) => s.projects.find((p) => p.id === update.projectId));
+  const lastEditor = useApp((s) => s.users.find((u) => u.id === update.lastEditedBy));
 
   const [editing, setEditing] = useState(false);
   const [thisWeek, setThisWeek] = useState(update.thisWeekGoals);
@@ -92,6 +93,19 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
 
       {open && (
         <div className="space-y-6 border-t border-border bg-gradient-subtle px-5 py-5">
+          {(update.lastEditedAt || update.revision) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                Revision {update.revision ?? 1}
+                {update.lastEditedAt ? ` · Last edited ${format(new Date(update.lastEditedAt), "MMM d, h:mm a")}` : ""}
+              </span>
+              {update.lastEditedBy ? (
+                <span>
+                  Edited by <span className="font-medium text-foreground">{lastEditor?.name ?? "Unknown"}</span>
+                </span>
+              ) : null}
+            </div>
+          )}
           <div className="grid gap-5 md:grid-cols-2">
             <div>
               <div className="mb-2 flex items-center justify-between">

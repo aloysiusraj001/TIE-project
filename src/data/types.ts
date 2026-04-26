@@ -49,12 +49,37 @@ export interface ResourceLink {
   url: string;
 }
 
+export type WeeklyUpdateEventType =
+  | "submitted"
+  | "edited"
+  | "resubmitted"
+  | "status_changed"
+  | "comment_added";
+
+export interface WeeklyUpdateEvent {
+  id: string;
+  type: WeeklyUpdateEventType;
+  at: string; // ISO
+  byUserId: string;
+  note?: string;
+
+  // optional metadata
+  fields?: ("thisWeekGoals" | "nextWeekGoals" | "blockers" | "progress" | "links")[];
+  statusFrom?: ApprovalStatus;
+  statusTo?: ApprovalStatus;
+  commentId?: string;
+}
+
 export interface WeeklyUpdate {
   id: string;
   projectId: string;
   weekNumber: number;
   weekStart: string; // ISO
   authorId: string;
+  revision: number;
+  lastEditedAt?: string;
+  lastEditedBy?: string;
+  audit: WeeklyUpdateEvent[];
   thisWeekGoals: WeeklyGoal[];
   nextWeekGoals: WeeklyGoal[];
   blockers: string;

@@ -6,6 +6,7 @@ import {
   doc,
   getCountFromServer,
   onSnapshot,
+  arrayUnion,
   setDoc,
   updateDoc,
   type Unsubscribe,
@@ -22,6 +23,7 @@ import {
   Role,
   User,
   WeeklyGoal,
+  WeeklyUpdateEvent,
   WeeklyUpdate,
 } from "./types";
 import { seedCourses, seedProjects, seedUpdates, seedUsers } from "./seed";
@@ -134,6 +136,14 @@ export const useApp = create<AppState>()((set, get) => {
         set({ purchaseRequests: snap.docs.map((d) => d.data() as PurchaseRequest) });
       }),
     );
+  };
+
+  const logUpdateEvent = (updateId: string, e: WeeklyUpdateEvent) => {
+    void updateDoc(doc(firestore, "updates", updateId), {
+      audit: arrayUnion(e),
+      lastEditedAt: e.at,
+      lastEditedBy: e.byUserId,
+    });
   };
 
   return {
@@ -390,6 +400,16 @@ export const useApp = create<AppState>()((set, get) => {
       const payload: WeeklyUpdate = {
         ...u,
         id,
+        revision: 1,
+        audit: [
+          {
+            id: uid("evt"),
+            type: "submitted",
+            at: new Date().toISOString(),
+            byUserId: u.authorId,
+            fields: ["thisWeekGoals", "nextWeekGoals", "blockers", "progress", "links"],
+          },
+        ],
         blockers: (u.blockers ?? "").toString(),
         progress: Number.isFinite(u.progress) ? u.progress : 0,
         thisWeekGoals,
@@ -406,6 +426,15 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
     resubmitUpdate: (updateId, patch) => {
+      const editorId = get().currentUserId ?? "unknown";
+      const at = new Date().toISOString();
+      const fields: WeeklyUpdateEvent["fields"] = [];
+      if (patch.thisWeekGoals) fields.push("thisWeekGoals");
+      if (patch.nextWeekGoals) fields.push("nextWeekGoals");
+      if (patch.blockers !== undefined) fields.push("blockers");
+      if (patch.progress !== undefined) fields.push("progress");
+      if (patch.links) fields.push("links");
+
       const thisWeekGoals = (patch.thisWeekGoals ?? []).map((g) => ({
         id: g.id,
         text: g.text,
@@ -427,23 +456,61 @@ export const useApp = create<AppState>()((set, get) => {
         ...(patch.blockers !== undefined ? { blockers: (patch.blockers ?? "").toString() } : {}),
         ...(patch.progress !== undefined ? { progress: Number.isFinite(patch.progress) ? patch.progress : 0 } : {}),
         status: "pending",
-        submittedAt: new Date().toISOString(),
+        submittedAt: at,
+        revision: (get().updates.find((u) => u.id === updateId)?.revision ?? 1) + 1,
+      });
+
+      logUpdateEvent(updateId, {
+        id: uid("evt"),
+        type: "resubmitted",
+        at,
+        byUserId: editorId,
+        fields,
       });
     },
     editUpdateGoals: (updateId, thisWeekGoals, nextWeekGoals) => {
+      const editorId = get().currentUserId ?? "unknown";
+      const at = new Date().toISOString();
       void updateDoc(doc(firestore, "updates", updateId), { thisWeekGoals, nextWeekGoals });
+      logUpdateEvent(updateId, {
+        id: uid("evt"),
+        type: "edited",
+        at,
+        byUserId: editorId,
+        fields: ["thisWeekGoals", "nextWeekGoals"],
+        note: "Edited by reviewer",
+      });
     },
     setApproval: (updateId, status) => {
+      const editorId = get().currentUserId ?? "unknown";
+      const at = new Date().toISOString();
+      const prev = get().updates.find((u) => u.id === updateId)?.status;
       void updateDoc(doc(firestore, "updates", updateId), { status });
+      logUpdateEvent(updateId, {
+        id: uid("evt"),
+        type: "status_changed",
+        at,
+        byUserId: editorId,
+        statusFrom: prev,
+        statusTo: status,
+      });
     },
     addComment: (updateId, authorId, text) => {
       const update = get().updates.find((u) => u.id === updateId);
       if (!update) return;
+      const commentId = uid("c");
       const comments: Comment[] = [
         ...update.comments,
-        { id: uid("c"), authorId, text, createdAt: new Date().toISOString() },
+        { id: commentId, authorId, text, createdAt: new Date().toISOString() },
       ];
       void updateDoc(doc(firestore, "updates", updateId), { comments });
+      logUpdateEvent(updateId, {
+        id: uid("evt"),
+        type: "comment_added",
+        at: new Date().toISOString(),
+        byUserId: authorId,
+        commentId,
+      });
     },
     setProjectProgress: (projectId, progress) => {
       void updateDoc(doc(firestore, "projects", projectId), { progress });

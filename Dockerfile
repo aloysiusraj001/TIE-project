@@ -47,6 +47,7 @@ FROM node:22-slim AS api_build
 WORKDIR /app/backend
 COPY --from=api_deps /app/backend/node_modules ./node_modules
 COPY backend/tsconfig.json ./
+COPY backend/package*.json ./
 COPY backend/src ./src
 RUN npm run build
 

@@ -72,6 +72,7 @@ export interface PurchaseRequest {
   item: string;
   quantity: number;
   cost: number; // per-item or total; UI treats as total
+  currency: "HKD";
   link: string;
   justification: string;
   status: PurchaseRequestStatus;

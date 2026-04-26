@@ -458,6 +458,7 @@ export const useApp = create<AppState>()((set, get) => {
         item: (p.item ?? "").toString(),
         quantity: Number.isFinite(p.quantity) ? p.quantity : 1,
         cost: Number.isFinite(p.cost) ? p.cost : 0,
+        currency: "HKD",
         link: (p.link ?? "").toString(),
         justification: (p.justification ?? "").toString(),
         status: "pending",

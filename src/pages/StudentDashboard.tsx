@@ -33,6 +33,7 @@ const StudentDashboard = () => {
   const [prCost, setPrCost] = useState(0);
   const [prLink, setPrLink] = useState("");
   const [prWhy, setPrWhy] = useState("");
+  const money = new Intl.NumberFormat("en-HK", { style: "currency", currency: "HKD" });
 
   const nav = [{ to: "/student", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
   const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
@@ -158,7 +159,7 @@ const StudentDashboard = () => {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Cost (total)</Label>
+                        <Label>Cost (total, HKD)</Label>
                         <Input
                           type="number"
                           min={0}
@@ -220,7 +221,7 @@ const StudentDashboard = () => {
                         <StatusBadge status={r.status} />
                       </div>
                       <div className="mt-1 text-sm text-muted-foreground">
-                        Cost: {Number(r.cost).toFixed(2)}
+                        Cost: {money.format(Number(r.cost) || 0)}
                       </div>
                       {r.link ? (
                         <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">

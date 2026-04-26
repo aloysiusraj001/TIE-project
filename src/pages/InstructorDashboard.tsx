@@ -24,6 +24,7 @@ const InstructorDashboard = () => {
   const users = useApp((s) => s.users);
   const purchaseRequests = useApp((s) => s.purchaseRequests);
   const reviewPurchaseRequest = useApp((s) => s.reviewPurchaseRequest);
+  const money = new Intl.NumberFormat("en-HK", { style: "currency", currency: "HKD" });
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InstructorTab>("projects");
@@ -116,7 +117,7 @@ const InstructorDashboard = () => {
                           <StatusBadge status={r.status} />
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
-                          Requested by {requester?.name ?? "Unknown"} · Cost: {Number(r.cost).toFixed(2)}
+                          Requested by {requester?.name ?? "Unknown"} · Cost: {money.format(Number(r.cost) || 0)}
                         </div>
                         {r.link ? (
                           <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">

@@ -14,7 +14,7 @@ steps:
       - '-c'
       - |
         docker build \
-          -t "us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$COMMIT_SHA" \
+          -t "us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$BUILD_ID" \
           --build-arg "VITE_FIREBASE_API_KEY=$$VITE_FIREBASE_API_KEY" \
           --build-arg "VITE_FIREBASE_AUTH_DOMAIN=$$VITE_FIREBASE_AUTH_DOMAIN" \
           --build-arg "VITE_FIREBASE_PROJECT_ID=$$VITE_FIREBASE_PROJECT_ID" \
@@ -28,7 +28,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$COMMIT_SHA'
+      - 'us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$BUILD_ID'
 
   # Step 3: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -38,7 +38,7 @@ steps:
       - 'deploy'
       - 'tie-project-app'
       - '--image'
-      - 'us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$COMMIT_SHA'
+      - 'us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$BUILD_ID'
       - '--region'
       - 'us-west1'
       - '--platform'
@@ -48,7 +48,7 @@ steps:
       - '8080'
 
 images:
-  - 'us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$COMMIT_SHA'
+  - 'us-west1-docker.pkg.dev/$PROJECT_ID/tie-project/tie-app:$BUILD_ID'
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -23,21 +23,36 @@ interface Props {
 
 export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props) => {
   const editGoals = useApp((s) => s.editUpdateGoals);
+  const resubmitUpdate = useApp((s) => s.resubmitUpdate);
   const setApproval = useApp((s) => s.setApproval);
   const addComment = useApp((s) => s.addComment);
   const currentUserId = useApp((s) => s.currentUserId)!;
+  const project = useApp((s) => s.projects.find((p) => p.id === update.projectId));
 
   const [editing, setEditing] = useState(false);
   const [thisWeek, setThisWeek] = useState(update.thisWeekGoals);
   const [nextWeek, setNextWeek] = useState(update.nextWeekGoals);
+  const [blockers, setBlockers] = useState(update.blockers);
+  const [progress, setProgress] = useState(update.progress);
+  const [links, setLinks] = useState(update.links);
   const [comment, setComment] = useState("");
   const [open, setOpen] = useState(defaultOpen);
 
   const canEdit = viewer === "instructor" || viewer === "admin";
   const canReview = viewer === "instructor" || viewer === "admin";
+  const canTeamEdit =
+    viewer === "student" &&
+    update.status === "needs_revision" &&
+    !!project &&
+    project.studentIds.includes(currentUserId);
 
   const saveEdits = () => {
     editGoals(update.id, thisWeek, nextWeek);
+    setEditing(false);
+  };
+
+  const resubmit = () => {
+    resubmitUpdate(update.id, { thisWeekGoals: thisWeek, nextWeekGoals: nextWeek, blockers, progress, links });
     setEditing(false);
   };
 
@@ -81,7 +96,7 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <h4 className="font-serif text-base font-semibold text-foreground">This week's goals</h4>
-                {canEdit && !editing && (
+                {(canEdit || canTeamEdit) && !editing && (
                   <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
                     <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                   </Button>
@@ -224,13 +239,22 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                   setEditing(false);
                   setThisWeek(update.thisWeekGoals);
                   setNextWeek(update.nextWeekGoals);
+                  setBlockers(update.blockers);
+                  setProgress(update.progress);
+                  setLinks(update.links);
                 }}
               >
                 <X className="mr-1.5 h-4 w-4" /> Cancel
               </Button>
-              <Button size="sm" onClick={saveEdits}>
-                <Save className="mr-1.5 h-4 w-4" /> Save changes
-              </Button>
+              {canEdit ? (
+                <Button size="sm" onClick={saveEdits}>
+                  <Save className="mr-1.5 h-4 w-4" /> Save changes
+                </Button>
+              ) : (
+                <Button size="sm" onClick={resubmit}>
+                  <Send className="mr-1.5 h-4 w-4" /> Resubmit
+                </Button>
+              )}
             </div>
           )}
 
@@ -239,9 +263,18 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
               <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">
                 Blockers
               </Label>
-              <p className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
-                {update.blockers || <span className="text-muted-foreground">None reported.</span>}
-              </p>
+              {editing ? (
+                <Textarea
+                  value={blockers}
+                  onChange={(e) => setBlockers(e.target.value)}
+                  rows={3}
+                  className="text-sm"
+                />
+              ) : (
+                <p className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
+                  {update.blockers || <span className="text-muted-foreground">None reported.</span>}
+                </p>
+              )}
             </div>
             <div>
               <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">
@@ -249,38 +282,77 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
               </Label>
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="font-serif text-2xl font-semibold text-primary">{update.progress}%</span>
+                  <span className="font-serif text-2xl font-semibold text-primary">{(editing ? progress : update.progress)}%</span>
                   <span className="text-xs text-muted-foreground">overall</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full bg-gradient-hero transition-all"
-                    style={{ width: `${update.progress}%` }}
-                  />
-                </div>
+                {editing ? (
+                  <>
+                    <Slider value={[progress]} onValueChange={(v) => setProgress(v[0])} min={0} max={100} step={1} />
+                    <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                      <span>0%</span><span>50%</span><span>100%</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full bg-gradient-hero transition-all" style={{ width: `${update.progress}%` }} />
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {update.links.length > 0 && (
+          {(editing ? links.length > 0 : update.links.length > 0) && (
             <div>
               <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">
                 Linked resources
               </Label>
               <div className="flex flex-wrap gap-2">
-                {update.links.map((l) => (
-                  <a
-                    key={l.id}
-                    href={l.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-primary hover:border-primary"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {l.label}
-                  </a>
-                ))}
+                {(editing ? links : update.links).map((l) =>
+                  editing ? (
+                    <div key={l.id} className="flex w-full gap-2">
+                      <Input
+                        value={l.label}
+                        onChange={(e) => {
+                          const next = [...links];
+                          const idx = next.findIndex((x) => x.id === l.id);
+                          if (idx >= 0) next[idx] = { ...next[idx], label: e.target.value };
+                          setLinks(next);
+                        }}
+                        className="text-sm"
+                      />
+                      <Input
+                        value={l.url}
+                        onChange={(e) => {
+                          const next = [...links];
+                          const idx = next.findIndex((x) => x.id === l.id);
+                          if (idx >= 0) next[idx] = { ...next[idx], url: e.target.value };
+                          setLinks(next);
+                        }}
+                        className="text-sm flex-1"
+                      />
+                      <Button size="icon" variant="ghost" onClick={() => setLinks(links.filter((x) => x.id !== l.id))}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <a
+                      key={l.id}
+                      href={l.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-primary hover:border-primary"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {l.label}
+                    </a>
+                  ),
+                )}
               </div>
+              {editing && (
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => setLinks([...links, newLink()])}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Add link
+                </Button>
+              )}
             </div>
           )}
 

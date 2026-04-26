@@ -10,6 +10,12 @@ import { WeeklyUpdateCard } from "@/components/WeeklyUpdateCard";
 import { SubmitUpdateForm } from "@/components/SubmitUpdateForm";
 import { LayoutDashboard, ChevronRight, ArrowLeft, Users as UsersIcon, Plus } from "lucide-react";
 import { differenceInDays } from "date-fns";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 
 const StudentDashboard = () => {
   const user = useApp((s) => s.users.find((u) => u.id === s.currentUserId))!;
@@ -17,9 +23,16 @@ const StudentDashboard = () => {
   const courses = useApp((s) => s.courses);
   const updates = useApp((s) => s.updates);
   const users = useApp((s) => s.users);
+  const purchaseRequests = useApp((s) => s.purchaseRequests);
+  const submitPurchaseRequest = useApp((s) => s.submitPurchaseRequest);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [prItem, setPrItem] = useState("");
+  const [prQty, setPrQty] = useState(1);
+  const [prCost, setPrCost] = useState(0);
+  const [prLink, setPrLink] = useState("");
+  const [prWhy, setPrWhy] = useState("");
 
   const nav = [{ to: "/student", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
   const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
@@ -31,6 +44,10 @@ const StudentDashboard = () => {
       .filter((u) => u.projectId === project.id)
       .sort((a, b) => b.weekNumber - a.weekNumber);
     const lastUpdate = projectUpdates[0];
+    const progressNow = lastUpdate?.progress ?? project.progress;
+    const projectPRs = purchaseRequests
+      .filter((r) => r.projectId === project.id)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     const daysSince = lastUpdate ? differenceInDays(new Date(), new Date(lastUpdate.submittedAt)) : null;
 
     return (
@@ -59,9 +76,9 @@ const StudentDashboard = () => {
             <div className="ml-auto flex items-center gap-3 text-sm">
               <span className="text-muted-foreground">Progress</span>
               <div className="h-2 w-32 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full bg-gradient-hero" style={{ width: `${project.progress}%` }} />
+                <div className="h-full bg-gradient-hero" style={{ width: `${progressNow}%` }} />
               </div>
-              <span className="font-serif font-semibold text-primary">{project.progress}%</span>
+              <span className="font-serif font-semibold text-primary">{progressNow}%</span>
             </div>
           </div>
 
@@ -105,6 +122,132 @@ const StudentDashboard = () => {
               )}
             </div>
           </div>
+
+          <div className="mt-10">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-xl font-semibold text-foreground">Purchase requests</h2>
+                <p className="text-sm text-muted-foreground">
+                  Request items for this project. Your instructor will review and approve/reject.
+                </p>
+              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-1.5 h-4 w-4" /> New request
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Request a purchase</DialogTitle>
+                  </DialogHeader>
+
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label>Item</Label>
+                      <Input value={prItem} onChange={(e) => setPrItem(e.target.value)} placeholder="e.g. Arduino Uno" />
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label>Quantity</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={prQty}
+                          onChange={(e) => setPrQty(Math.max(1, Number(e.target.value || 1)))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Cost (total)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={prCost}
+                          onChange={(e) => setPrCost(Math.max(0, Number(e.target.value || 0)))}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Link</Label>
+                      <Input value={prLink} onChange={(e) => setPrLink(e.target.value)} placeholder="https://…" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Why it’s needed</Label>
+                      <Textarea value={prWhy} onChange={(e) => setPrWhy(e.target.value)} rows={4} />
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      onClick={() => {
+                        if (!prItem.trim() || !prWhy.trim()) {
+                          toast.error("Item and justification are required.");
+                          return;
+                        }
+                        submitPurchaseRequest({
+                          projectId: project.id,
+                          requesterId: user.id,
+                          item: prItem.trim(),
+                          quantity: prQty,
+                          cost: prCost,
+                          link: prLink.trim(),
+                          justification: prWhy.trim(),
+                        });
+                        setPrItem("");
+                        setPrQty(1);
+                        setPrCost(0);
+                        setPrLink("");
+                        setPrWhy("");
+                        toast.success("Purchase request submitted.");
+                      }}
+                    >
+                      Submit request
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="space-y-3">
+              {projectPRs.map((r) => (
+                <Card key={r.id} className="academic-card p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-foreground">{r.item}</span>
+                        <span className="text-xs text-muted-foreground">×{r.quantity}</span>
+                        <StatusBadge status={r.status} />
+                      </div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        Cost: {Number(r.cost).toFixed(2)}
+                      </div>
+                      {r.link ? (
+                        <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4" /> View item link
+                        </a>
+                      ) : null}
+                      <p className="mt-3 text-sm text-foreground">{r.justification}</p>
+                      {r.reviewNote ? (
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          Instructor note: {r.reviewNote}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+
+              {projectPRs.length === 0 && (
+                <Card className="academic-card p-8 text-center text-sm text-muted-foreground">
+                  No purchase requests yet.
+                </Card>
+              )}
+            </div>
+          </div>
         </div>
       </AppShell>
     );
@@ -126,6 +269,7 @@ const StudentDashboard = () => {
             const lastUpdate = updates
               .filter((u) => u.projectId === p.id)
               .sort((a, b) => b.weekNumber - a.weekNumber)[0];
+            const progressNow = lastUpdate?.progress ?? p.progress;
             return (
               <Card key={p.id} className="academic-card cursor-pointer p-5" onClick={() => setSelectedProjectId(p.id)}>
                 <div className="mb-3 flex items-start justify-between">
@@ -145,10 +289,10 @@ const StudentDashboard = () => {
                 <div className="mb-3">
                   <div className="mb-1 flex justify-between text-xs">
                     <span className="text-muted-foreground">Progress</span>
-                    <span className="font-medium text-primary">{p.progress}%</span>
+                    <span className="font-medium text-primary">{progressNow}%</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full bg-gradient-hero" style={{ width: `${p.progress}%` }} />
+                    <div className="h-full bg-gradient-hero" style={{ width: `${progressNow}%` }} />
                   </div>
                 </div>
                 {lastUpdate ? (

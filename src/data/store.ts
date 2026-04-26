@@ -16,6 +16,8 @@ import {
   Comment,
   Course,
   Project,
+  PurchaseRequest,
+  PurchaseRequestStatus,
   ResourceLink,
   Role,
   User,
@@ -36,6 +38,7 @@ interface AppState {
   courses: Course[];
   projects: Project[];
   updates: WeeklyUpdate[];
+  purchaseRequests: PurchaseRequest[];
 
   init: () => void;
   signOut: () => Promise<void>;
@@ -53,6 +56,7 @@ interface AppState {
 
   // updates
   submitUpdate: (u: Omit<WeeklyUpdate, "id" | "submittedAt" | "status" | "comments">) => void;
+  resubmitUpdate: (updateId: string, patch: Partial<Pick<WeeklyUpdate, "thisWeekGoals" | "nextWeekGoals" | "blockers" | "progress" | "links">>) => void;
   editUpdateGoals: (
     updateId: string,
     thisWeekGoals: WeeklyGoal[],
@@ -61,6 +65,10 @@ interface AppState {
   setApproval: (updateId: string, status: ApprovalStatus) => void;
   addComment: (updateId: string, authorId: string, text: string) => void;
   setProjectProgress: (projectId: string, progress: number) => void;
+
+  // purchasing (separate from weekly updates)
+  submitPurchaseRequest: (p: Omit<PurchaseRequest, "id" | "createdAt" | "status">) => void;
+  reviewPurchaseRequest: (id: string, status: PurchaseRequestStatus, reviewNote?: string) => void;
 }
 
 const palette = [
@@ -121,6 +129,11 @@ export const useApp = create<AppState>()((set, get) => {
         set({ updates: snap.docs.map((d) => d.data() as WeeklyUpdate) });
       }),
     );
+    unsubs.push(
+      onSnapshot(collection(firestore, "purchaseRequests"), (snap) => {
+        set({ purchaseRequests: snap.docs.map((d) => d.data() as PurchaseRequest) });
+      }),
+    );
   };
 
   return {
@@ -133,6 +146,7 @@ export const useApp = create<AppState>()((set, get) => {
     courses: [],
     projects: [],
     updates: [],
+    purchaseRequests: [],
 
     init: () => {
       if (get().initialized) return;
@@ -386,7 +400,35 @@ export const useApp = create<AppState>()((set, get) => {
         comments: [],
       };
       void setDoc(doc(firestore, "updates", id), payload);
-      void updateDoc(doc(firestore, "projects", u.projectId), { progress: u.progress });
+      // Projects are write-protected in production (admin SDK only). Progress is derived from updates.
+      void updateDoc(doc(firestore, "projects", u.projectId), { progress: u.progress }).catch(() => {
+        // ignore
+      });
+    },
+    resubmitUpdate: (updateId, patch) => {
+      const thisWeekGoals = (patch.thisWeekGoals ?? []).map((g) => ({
+        id: g.id,
+        text: g.text,
+        achieved: g.achieved,
+        ...(g.reason?.trim() ? { reason: g.reason } : {}),
+      }));
+      const nextWeekGoals = (patch.nextWeekGoals ?? []).map((g) => ({
+        id: g.id,
+        text: g.text,
+        achieved: g.achieved ?? null,
+        ...(g.reason?.trim() ? { reason: g.reason } : {}),
+      }));
+      const links = (patch.links ?? []).map((l) => ({ id: l.id, label: l.label, url: l.url }));
+
+      void updateDoc(doc(firestore, "updates", updateId), {
+        ...(patch.thisWeekGoals ? { thisWeekGoals } : {}),
+        ...(patch.nextWeekGoals ? { nextWeekGoals } : {}),
+        ...(patch.links ? { links } : {}),
+        ...(patch.blockers !== undefined ? { blockers: (patch.blockers ?? "").toString() } : {}),
+        ...(patch.progress !== undefined ? { progress: Number.isFinite(patch.progress) ? patch.progress : 0 } : {}),
+        status: "pending",
+        submittedAt: new Date().toISOString(),
+      });
     },
     editUpdateGoals: (updateId, thisWeekGoals, nextWeekGoals) => {
       void updateDoc(doc(firestore, "updates", updateId), { thisWeekGoals, nextWeekGoals });
@@ -405,6 +447,33 @@ export const useApp = create<AppState>()((set, get) => {
     },
     setProjectProgress: (projectId, progress) => {
       void updateDoc(doc(firestore, "projects", projectId), { progress });
+    },
+
+    submitPurchaseRequest: (p) => {
+      const id = uid("pr");
+      const payload: PurchaseRequest = {
+        id,
+        projectId: p.projectId,
+        requesterId: p.requesterId,
+        item: (p.item ?? "").toString(),
+        quantity: Number.isFinite(p.quantity) ? p.quantity : 1,
+        cost: Number.isFinite(p.cost) ? p.cost : 0,
+        link: (p.link ?? "").toString(),
+        justification: (p.justification ?? "").toString(),
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      };
+      void setDoc(doc(firestore, "purchaseRequests", id), payload);
+    },
+
+    reviewPurchaseRequest: (id, status, reviewNote) => {
+      const reviewerId = get().currentUserId;
+      void updateDoc(doc(firestore, "purchaseRequests", id), {
+        status,
+        reviewerId: reviewerId ?? null,
+        reviewedAt: new Date().toISOString(),
+        ...(reviewNote?.trim() ? { reviewNote: reviewNote.trim() } : { reviewNote: null }),
+      });
     },
   };
 });

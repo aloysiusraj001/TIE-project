@@ -27,6 +27,8 @@ export interface Project {
 
 export type ApprovalStatus = "pending" | "approved" | "needs_revision";
 
+export type PurchaseRequestStatus = "pending" | "approved" | "rejected";
+
 export interface WeeklyGoal {
   id: string;
   text: string;
@@ -61,4 +63,20 @@ export interface WeeklyUpdate {
   status: ApprovalStatus;
   comments: Comment[];
   submittedAt: string;
+}
+
+export interface PurchaseRequest {
+  id: string;
+  projectId: string;
+  requesterId: string;
+  item: string;
+  quantity: number;
+  cost: number; // per-item or total; UI treats as total
+  link: string;
+  justification: string;
+  status: PurchaseRequestStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  reviewerId?: string;
+  reviewNote?: string;
 }

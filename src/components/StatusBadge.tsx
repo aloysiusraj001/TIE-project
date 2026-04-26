@@ -1,9 +1,11 @@
 import { forwardRef } from "react";
-import { ApprovalStatus } from "@/data/types";
-import { CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { ApprovalStatus, PurchaseRequestStatus } from "@/data/types";
+import { CheckCircle2, Clock, AlertCircle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const meta: Record<ApprovalStatus, { label: string; classes: string; Icon: typeof Clock }> = {
+type AnyStatus = ApprovalStatus | PurchaseRequestStatus;
+
+const meta: Record<AnyStatus, { label: string; classes: string; Icon: typeof Clock }> = {
   pending: {
     label: "Pending review",
     classes: "bg-warning/10 text-warning border-warning/20",
@@ -19,9 +21,14 @@ const meta: Record<ApprovalStatus, { label: string; classes: string; Icon: typeo
     classes: "bg-destructive/10 text-destructive border-destructive/20",
     Icon: AlertCircle,
   },
+  rejected: {
+    label: "Rejected",
+    classes: "bg-destructive/10 text-destructive border-destructive/20",
+    Icon: XCircle,
+  },
 };
 
-export const StatusBadge = forwardRef<HTMLSpanElement, { status: ApprovalStatus; className?: string }>(
+export const StatusBadge = forwardRef<HTMLSpanElement, { status: AnyStatus; className?: string }>(
   ({ status, className }, ref) => {
     const m = meta[status];
     const Icon = m.Icon;

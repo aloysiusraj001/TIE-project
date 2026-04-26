@@ -535,6 +535,10 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     reviewPurchaseRequest: (id, status, reviewNote) => {
+      const existing = get().purchaseRequests.find((r) => r.id === id);
+      // Lock decisions after approval/rejection; only pending can be reviewed.
+      if (existing && existing.status !== "pending") return;
+
       const reviewerId = get().currentUserId;
       void updateDoc(doc(firestore, "purchaseRequests", id), {
         status,

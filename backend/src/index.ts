@@ -43,6 +43,34 @@ app.get("/me", requireFirebaseAuth, (req, res) => {
   res.json({ uid: decoded.uid, email: decoded.email ?? null });
 });
 
+// Ensure a Firestore "users" row exists for the signed-in Firebase user.
+// New sign-ups default to "student"; admins can later promote via admin UI.
+app.post("/users/ensure", requireFirebaseAuth, async (req, res) => {
+  const decoded = (req as any).firebaseUser as { email?: string };
+  const email = decoded.email?.trim();
+  if (!email) return res.status(400).json({ error: "Missing email in token" });
+
+  const db = getFirestore();
+  const usersCol = db.collection("users");
+  const snap = await usersCol.where("email", "==", email).limit(1).get();
+  if (!snap.empty) return res.json({ ok: true, created: false });
+
+  const id = uid("u");
+  const count = (await usersCol.count().get()).data().count;
+  const avatarColor = palette[count % palette.length];
+  const name = email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Student";
+
+  await usersCol.doc(id).set({
+    id,
+    name,
+    email,
+    role: "student",
+    avatarColor,
+  });
+
+  return res.json({ ok: true, created: true, id });
+});
+
 const palette = [
   "217 60% 22%",
   "188 70% 38%",

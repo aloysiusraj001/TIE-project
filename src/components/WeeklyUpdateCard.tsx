@@ -415,10 +415,16 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
           {canReview && (
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
               <span className="mr-auto text-xs text-muted-foreground">Set review status:</span>
+              {update.status === "approved" ? (
+                <span className="text-xs text-muted-foreground">
+                  Locked after approval.
+                </span>
+              ) : null}
               <Button
                 size="sm"
                 variant={update.status === "needs_revision" ? "default" : "outline"}
                 onClick={() => setApproval(update.id, "needs_revision")}
+                disabled={update.status === "approved"}
                 className={
                   update.status === "needs_revision" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""
                 }
@@ -429,12 +435,14 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                 size="sm"
                 variant={update.status === "pending" ? "default" : "outline"}
                 onClick={() => setApproval(update.id, "pending")}
+                disabled={update.status === "approved"}
               >
                 Pending
               </Button>
               <Button
                 size="sm"
                 onClick={() => setApproval(update.id, "approved")}
+                disabled={update.status === "approved"}
                 className={
                   update.status === "approved"
                     ? "bg-success text-success-foreground hover:bg-success/90"

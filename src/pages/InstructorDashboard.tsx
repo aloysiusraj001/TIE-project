@@ -107,6 +107,7 @@ const InstructorDashboard = () => {
               {projectPRs.map((r) => {
                 const requester = users.find((u) => u.id === r.requesterId);
                 const prNote = prNotes[r.id] ?? "";
+                const locked = r.status !== "pending";
                 return (
                   <Card key={r.id} className="academic-card p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -141,11 +142,13 @@ const InstructorDashboard = () => {
                           value={prNote}
                           onChange={(e) => setPrNotes((s) => ({ ...s, [r.id]: e.target.value }))}
                           rows={2}
+                          disabled={locked}
                         />
                       </div>
                       <div className="flex items-center gap-2 md:col-span-2">
                         <Button
                           variant="outline"
+                          disabled={locked}
                           onClick={() => {
                             try {
                               reviewPurchaseRequest(r.id, "rejected", prNote);
@@ -159,6 +162,7 @@ const InstructorDashboard = () => {
                           Reject
                         </Button>
                         <Button
+                          disabled={locked}
                           onClick={() => {
                             try {
                               reviewPurchaseRequest(r.id, "approved", prNote);
@@ -171,6 +175,9 @@ const InstructorDashboard = () => {
                         >
                           Approve
                         </Button>
+                        {locked ? (
+                          <span className="text-xs text-muted-foreground">Locked after decision.</span>
+                        ) : null}
                       </div>
                     </div>
                   </Card>

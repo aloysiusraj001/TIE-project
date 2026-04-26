@@ -71,7 +71,9 @@ const palette = [
   "0 70% 48%",
 ];
 
-const backendUrl = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
+const backendUrlRaw = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
+const backendUrl =
+  backendUrlRaw === "." || backendUrlRaw === "/" ? window.location.origin : backendUrlRaw;
 
 export const useApp = create<AppState>()((set, get) => {
   let unsubAuth: Unsubscribe | null = null;

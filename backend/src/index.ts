@@ -1,6 +1,8 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getAuth, getFirestore } from "./firebaseAdmin.js";
 
 const app = express();
@@ -88,6 +90,15 @@ app.post("/admin/users", requireFirebaseAuth, requireAdminRole, async (req, res)
   });
 
   return res.json({ ok: true, id });
+});
+
+// Serve built frontend from the same Cloud Run service (optional but recommended).
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const staticDir = path.resolve(__dirname, "../../public");
+app.use(express.static(staticDir));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(staticDir, "index.html"));
 });
 
 const port = Number(process.env.PORT ?? 8080);

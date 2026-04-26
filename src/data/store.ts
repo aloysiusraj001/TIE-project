@@ -167,7 +167,8 @@ export const useApp = create<AppState>()((set, get) => {
       const fbUser = firebaseAuth.currentUser;
       if (backendUrl && fbUser) {
         const token = await fbUser.getIdToken();
-        const res = await fetch(`${backendUrl.replace(/\/$/, "")}/admin/users`, {
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/users`;
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -175,11 +176,28 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify(u),
         });
-        if (!res.ok) throw new Error("Backend user create failed");
+        if (!res.ok) {
+          let detail = "";
+          try {
+            const data = (await res.json()) as { error?: string };
+            detail = data?.error ? `: ${data.error}` : "";
+          } catch {
+            // ignore
+          }
+          throw new Error(`Backend user create failed (${res.status})${detail}`);
+        }
         return;
       }
 
       // Fallback for local dev / permissive rules.
+      if (!backendUrl) {
+        throw new Error(
+          "VITE_BACKEND_URL is not set, so the app tried a direct Firestore write (usually blocked by rules). Set VITE_BACKEND_URL and redeploy.",
+        );
+      }
+      if (!fbUser) {
+        throw new Error("Not signed in (missing Firebase Auth user).");
+      }
       const id = uid("u");
       const avatarColor = palette[get().users.length % palette.length];
       await setDoc(doc(firestore, "users", id), { ...u, id, avatarColor } satisfies User);

@@ -117,8 +117,9 @@ const AdminDashboard = () => {
                           setNewEmail("");
                           setNewRole("student");
                           toast.success("User added.");
-                        } catch {
-                          toast.error("Could not add user. Check Firestore rules/permissions.");
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not add user: ${msg}`);
                         }
                       }}
                     >

@@ -40,15 +40,15 @@ interface AppState {
   signOut: () => Promise<void>;
 
   // admin
-  addUser: (u: Omit<User, "id" | "avatarColor">) => void;
-  updateUserRole: (id: string, role: Role) => void;
-  deleteUser: (id: string) => void;
-  addCourse: (c: Omit<Course, "id">) => void;
-  assignInstructor: (courseId: string, instructorId: string) => void;
-  removeInstructor: (courseId: string, instructorId: string) => void;
-  addProject: (p: Omit<Project, "id" | "progress">) => void;
-  assignStudentToProject: (projectId: string, studentId: string) => void;
-  removeStudentFromProject: (projectId: string, studentId: string) => void;
+  addUser: (u: Omit<User, "id" | "avatarColor">) => Promise<void>;
+  updateUserRole: (id: string, role: Role) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  addCourse: (c: Omit<Course, "id">) => Promise<void>;
+  assignInstructor: (courseId: string, instructorId: string) => Promise<void>;
+  removeInstructor: (courseId: string, instructorId: string) => Promise<void>;
+  addProject: (p: Omit<Project, "id" | "progress">) => Promise<void>;
+  assignStudentToProject: (projectId: string, studentId: string) => Promise<void>;
+  removeStudentFromProject: (projectId: string, studentId: string) => Promise<void>;
 
   // updates
   submitUpdate: (u: Omit<WeeklyUpdate, "id" | "submittedAt" | "status" | "comments">) => void;
@@ -161,52 +161,52 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     // admin
-    addUser: (u) => {
+    addUser: async (u) => {
       const id = uid("u");
       const avatarColor = palette[get().users.length % palette.length];
-      void setDoc(doc(firestore, "users", id), { ...u, id, avatarColor } satisfies User);
+      await setDoc(doc(firestore, "users", id), { ...u, id, avatarColor } satisfies User);
     },
-    updateUserRole: (id, role) => {
-      void updateDoc(doc(firestore, "users", id), { role });
+    updateUserRole: async (id, role) => {
+      await updateDoc(doc(firestore, "users", id), { role });
     },
-    deleteUser: (id) => {
-      void deleteDoc(doc(firestore, "users", id));
+    deleteUser: async (id) => {
+      await deleteDoc(doc(firestore, "users", id));
     },
 
-    addCourse: (c) => {
+    addCourse: async (c) => {
       const id = uid("c");
-      void setDoc(doc(firestore, "courses", id), { ...c, id } satisfies Course);
+      await setDoc(doc(firestore, "courses", id), { ...c, id } satisfies Course);
     },
-    assignInstructor: (courseId, instructorId) => {
+    assignInstructor: async (courseId, instructorId) => {
       const course = get().courses.find((c) => c.id === courseId);
       if (!course || course.instructorIds.includes(instructorId)) return;
-      void updateDoc(doc(firestore, "courses", courseId), {
+      await updateDoc(doc(firestore, "courses", courseId), {
         instructorIds: [...course.instructorIds, instructorId],
       });
     },
-    removeInstructor: (courseId, instructorId) => {
+    removeInstructor: async (courseId, instructorId) => {
       const course = get().courses.find((c) => c.id === courseId);
       if (!course) return;
-      void updateDoc(doc(firestore, "courses", courseId), {
+      await updateDoc(doc(firestore, "courses", courseId), {
         instructorIds: course.instructorIds.filter((i) => i !== instructorId),
       });
     },
 
-    addProject: (p) => {
+    addProject: async (p) => {
       const id = uid("p");
-      void setDoc(doc(firestore, "projects", id), { ...p, id, progress: 0 } satisfies Project);
+      await setDoc(doc(firestore, "projects", id), { ...p, id, progress: 0 } satisfies Project);
     },
-    assignStudentToProject: (projectId, studentId) => {
+    assignStudentToProject: async (projectId, studentId) => {
       const project = get().projects.find((p) => p.id === projectId);
       if (!project || project.studentIds.includes(studentId)) return;
-      void updateDoc(doc(firestore, "projects", projectId), {
+      await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: [...project.studentIds, studentId],
       });
     },
-    removeStudentFromProject: (projectId, studentId) => {
+    removeStudentFromProject: async (projectId, studentId) => {
       const project = get().projects.find((p) => p.id === projectId);
       if (!project) return;
-      void updateDoc(doc(firestore, "projects", projectId), {
+      await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: project.studentIds.filter((i) => i !== studentId),
       });
     },

@@ -105,12 +105,25 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button onClick={() => {
-                      if (!newName.trim() || !newEmail.trim()) { toast.error("Name and email are required."); return; }
-                      addUser({ name: newName, email: newEmail, role: newRole });
-                      setNewName(""); setNewEmail(""); setNewRole("student");
-                      toast.success("User added.");
-                    }}>Create user</Button>
+                    <Button
+                      onClick={async () => {
+                        if (!newName.trim() || !newEmail.trim()) {
+                          toast.error("Name and email are required.");
+                          return;
+                        }
+                        try {
+                          await addUser({ name: newName, email: newEmail, role: newRole });
+                          setNewName("");
+                          setNewEmail("");
+                          setNewRole("student");
+                          toast.success("User added.");
+                        } catch {
+                          toast.error("Could not add user. Check Firestore rules/permissions.");
+                        }
+                      }}
+                    >
+                      Create user
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>

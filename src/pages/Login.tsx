@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from "react";
 import { isValidDemoPassword } from "@/data/demoAuth";
 import { firebaseAuth } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { seedUsers } from "@/data/seed";
 
 const roleMeta = {
   admin: { label: "Administrator", icon: ShieldCheck, blurb: "Full access — manage users, courses, and projects." },
@@ -17,7 +18,7 @@ const roleMeta = {
 } as const;
 
 const Login = () => {
-  const users = useApp((s) => s.users);
+  useApp((s) => s.authReady);
   const navigate = useNavigate();
   const pwRef = useRef<HTMLInputElement | null>(null);
   const [password, setPassword] = useState("");
@@ -27,9 +28,9 @@ const Login = () => {
   const canLogin = useMemo(() => isValidDemoPassword(password), [password]);
 
   const grouped = {
-    admin: users.filter((u) => u.role === "admin"),
-    instructor: users.filter((u) => u.role === "instructor"),
-    student: users.filter((u) => u.role === "student"),
+    admin: seedUsers.filter((u) => u.role === "admin"),
+    instructor: seedUsers.filter((u) => u.role === "instructor"),
+    student: seedUsers.filter((u) => u.role === "student"),
   };
 
   const handle = async (email: string, role: string) => {

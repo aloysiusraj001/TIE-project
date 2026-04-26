@@ -132,15 +132,24 @@ export const useApp = create<AppState>()((set, get) => {
       if (get().initialized) return;
       set({ initialized: true });
 
-      void ensureSeeded().then(startListeners);
-
       unsubAuth?.();
       unsubAuth = onAuthStateChanged(firebaseAuth, (fbUser) => {
         set({ authReady: true });
         if (!fbUser?.email) {
+          unsubs.forEach((u) => u());
+          unsubs = [];
           set({ currentUserId: null });
           return;
         }
+
+        void ensureSeeded()
+          .catch(() => {
+            // If rules disallow seeding from the client, continue without it.
+          })
+          .finally(() => {
+            startListeners();
+          });
+
         const u = get().users.find((x) => x.email.toLowerCase() === fbUser.email!.toLowerCase());
         set({ currentUserId: u?.id ?? null });
       });

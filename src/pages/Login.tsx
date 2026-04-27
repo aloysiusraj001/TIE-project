@@ -183,6 +183,26 @@ const Login = () => {
                 />
               </div>
 
+              {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+              {magicSent ? (
+                <p className="text-sm text-muted-foreground">
+                  We emailed you a sign-in link. Open it on the same device/browser. If you don’t see it, check your spam/junk folder.
+                </p>
+              ) : null}
+              {magicLinkDetected ? (
+                <p className="text-sm text-muted-foreground">
+                  Magic link detected. If you opened the link on a different device/browser, re-enter your email then click “Complete sign-in”.
+                </p>
+              ) : null}
+
+              <Button
+                className="w-full"
+                onClick={() => void handleSignIn()}
+                disabled={busy || !email.trim() || !password}
+              >
+                {busy ? "Signing in..." : "Sign in"}
+              </Button>
+
               <div className="rounded-md border border-border bg-gradient-subtle p-4">
                 <div className="mb-2 text-sm font-semibold text-foreground">First time here?</div>
                 <p className="mb-3 text-xs text-muted-foreground">
@@ -224,46 +244,27 @@ const Login = () => {
                     />
                   </div>
                 </div>
-              </div>
 
-              {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-              {magicSent ? (
-                <p className="text-sm text-muted-foreground">
-                  We emailed you a sign-in link. Open it on the same device/browser. If you don’t see it, check your spam/junk folder.
-                </p>
-              ) : null}
-              {magicLinkDetected ? (
-                <p className="text-sm text-muted-foreground">
-                  Magic link detected. If you opened the link on a different device/browser, re-enter your email then click “Complete sign-in”.
-                </p>
-              ) : null}
-
-              <Button
-                className="w-full"
-                onClick={() => void handleSignIn()}
-                disabled={busy || !email.trim() || !password}
-              >
-                {busy ? "Signing in..." : "Sign in"}
-              </Button>
-
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={() => void handleMagicLink()}
-                disabled={busy || !email.trim()}
-              >
-                {busy ? "Sending..." : "Email me a magic link (sign up)"}
-              </Button>
-
-              {magicLinkDetected ? (
                 <Button
-                  className="w-full"
-                  onClick={() => void completeMagicLink()}
+                  className="mt-4 w-full"
+                  variant="outline"
+                  onClick={() => void handleMagicLink()}
                   disabled={busy || !email.trim()}
                 >
-                  {busy ? "Completing..." : "Complete sign-in"}
+                  {busy ? "Sending..." : "Email me a magic link (sign up)"}
                 </Button>
-              ) : null}
+
+                {magicLinkDetected ? (
+                  <Button
+                    className="mt-2 w-full"
+                    onClick={() => void completeMagicLink()}
+                    disabled={busy || !email.trim()}
+                  >
+                    {busy ? "Completing..." : "Complete sign-in"}
+                  </Button>
+                ) : null}
+              </div>
+
             </div>
           </Card>
         </div>

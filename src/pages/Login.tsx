@@ -114,7 +114,7 @@ const Login = () => {
       await sendSignInLinkToEmail(firebaseAuth, e, actionCodeSettings);
       window.localStorage.setItem("magicLinkEmail", e);
       setMagicSent(true);
-      toast.success("Magic link sent. Check your email.");
+      toast.success("Magic link sent. Check your email (and spam/junk).");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not send magic link.";
       setError(`${msg} Check Firebase Auth settings for Email Link sign-in.`);
@@ -229,7 +229,7 @@ const Login = () => {
               {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
               {magicSent ? (
                 <p className="text-sm text-muted-foreground">
-                  We emailed you a sign-in link. Open it on the same device/browser.
+                  We emailed you a sign-in link. Open it on the same device/browser. If you don’t see it, check your spam/junk folder.
                 </p>
               ) : null}
               {magicLinkDetected ? (

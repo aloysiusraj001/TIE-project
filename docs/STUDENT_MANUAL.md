@@ -17,6 +17,7 @@ This manual walks you through your **student UI journey**: what you’ll see on-
 2. Go to **Sign in**.
 3. Use the sign-in method your course uses. Some courses use a **magic link**:
    - Enter your email and click **Email me a magic link (sign up)**.
+   - Fill in the **First time here?** section (Full name, optional HKUST email, and Programme).
    - Open the link from your email.
    - If the app asks again, re-enter your email and click **Complete sign-in**.
 

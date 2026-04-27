@@ -100,9 +100,9 @@ const Login = () => {
 
   const handleMagicLink = async () => {
     setError(null);
-    const e = email.trim();
+    const e = (email.trim() || hkustEmail.trim()).trim();
     if (!e) {
-      setError("Enter your email first.");
+      setError("Enter your email first (Email or HKUST email).");
       return;
     }
     try {
@@ -249,7 +249,7 @@ const Login = () => {
                   className="mt-4 w-full"
                   variant="outline"
                   onClick={() => void handleMagicLink()}
-                  disabled={busy || !email.trim()}
+                  disabled={busy || !(email.trim() || hkustEmail.trim())}
                 >
                   {busy ? "Sending..." : "Email me a magic link (sign up)"}
                 </Button>

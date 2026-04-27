@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // USERS (readable to signed-in; writes only via backend/admin SDK)
+    match /users/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // COURSES (readable to signed-in; writes only via backend/admin SDK)
+    match /courses/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // PROJECTS (readable to signed-in; writes only via backend/admin SDK)
+    match /projects/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // UPDATES (read-only from client; writes only via backend/admin SDK)
+    match /updates/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // PURCHASE REQUESTS (read-only from client; writes only via backend/admin SDK)
+    match /purchaseRequests/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

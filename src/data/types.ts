@@ -4,6 +4,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** Optional profile details collected during sign-up. */
+  hkustEmail?: string | null;
+  programme?: string | null;
   role: Role;
   avatarColor: string;
 }

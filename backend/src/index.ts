@@ -55,15 +55,23 @@ app.post("/users/ensure", requireFirebaseAuth, async (req, res) => {
   const snap = await usersCol.where("email", "==", email).limit(1).get();
   if (!snap.empty) return res.json({ ok: true, created: false });
 
+  const body = (req.body ?? {}) as { name?: unknown; hkustEmail?: unknown; programme?: unknown };
+  const nameFromBody = typeof body.name === "string" ? body.name.trim() : "";
+  const programme = typeof body.programme === "string" ? body.programme.trim() : "";
+  const hkustEmail =
+    typeof body.hkustEmail === "string" && body.hkustEmail.trim() ? body.hkustEmail.trim() : "";
+
   const id = uid("u");
   const count = (await usersCol.count().get()).data().count;
   const avatarColor = palette[count % palette.length];
-  const name = email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Student";
+  const name = nameFromBody || email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Student";
 
   await usersCol.doc(id).set({
     id,
     name,
     email,
+    hkustEmail: hkustEmail || null,
+    programme: programme || null,
     role: "student",
     avatarColor,
   });
@@ -343,6 +351,286 @@ app.patch("/instructor/projects/:id/students", requireFirebaseAuth, requireInstr
       ? Array.from(new Set([...studentIds, studentId.trim()]))
       : studentIds.filter((i) => i !== studentId.trim());
   await ref.update({ studentIds: next });
+  return res.json({ ok: true });
+});
+
+// UPDATES + PURCHASE REQUESTS
+// All writes happen via backend (Admin SDK); Firestore client rules can be read-only.
+
+app.post("/updates", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const body = (req.body ?? {}) as any;
+  const projectId = (body.projectId ?? "").toString().trim();
+  const weekNumber = Number(body.weekNumber);
+  const weekStart = (body.weekStart ?? "").toString();
+  const progress = Number(body.progress);
+  const blockers = (body.blockers ?? "").toString();
+  const thisWeekGoals = Array.isArray(body.thisWeekGoals) ? body.thisWeekGoals : [];
+  const nextWeekGoals = Array.isArray(body.nextWeekGoals) ? body.nextWeekGoals : [];
+  const links = Array.isArray(body.links) ? body.links : [];
+
+  if (!projectId) return res.status(400).json({ error: "projectId is required" });
+  if (!Number.isFinite(weekNumber) || weekNumber <= 0) return res.status(400).json({ error: "weekNumber is required" });
+  if (!weekStart) return res.status(400).json({ error: "weekStart is required" });
+
+  const db = getFirestore();
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+
+  const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
+  if (!studentIds.includes(u.id)) return res.status(403).json({ error: "Only project students can submit updates" });
+
+  const id = uid("w");
+  const now = new Date().toISOString();
+  const payload = {
+    id,
+    projectId,
+    weekNumber,
+    weekStart,
+    authorId: u.id,
+    revision: 1,
+    audit: [
+      {
+        id: uid("evt"),
+        type: "submitted",
+        at: now,
+        byUserId: u.id,
+        fields: ["thisWeekGoals", "nextWeekGoals", "blockers", "progress", "links"],
+      },
+    ],
+    thisWeekGoals,
+    nextWeekGoals,
+    blockers,
+    progress: Number.isFinite(progress) ? progress : 0,
+    links,
+    status: "pending",
+    comments: [],
+    submittedAt: now,
+  };
+
+  await db.collection("updates").doc(id).set(payload);
+  // Best-effort project progress update (kept consistent with existing UI expectations).
+  await db.collection("projects").doc(projectId).update({ progress: payload.progress }).catch(() => {});
+  return res.json({ ok: true, id });
+});
+
+app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const updateId = req.params.id;
+  const patch = (req.body ?? {}) as any;
+
+  const db = getFirestore();
+  const ref = db.collection("updates").doc(updateId);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Update not found" });
+
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const status = (snap.get("status") as string | undefined) ?? "pending";
+  if (status !== "needs_revision") return res.status(400).json({ error: "Only updates needing revision can be resubmitted" });
+
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
+  if (!studentIds.includes(u.id)) return res.status(403).json({ error: "Only project students can resubmit updates" });
+
+  const fields: string[] = [];
+  if (patch.thisWeekGoals) fields.push("thisWeekGoals");
+  if (patch.nextWeekGoals) fields.push("nextWeekGoals");
+  if (patch.blockers !== undefined) fields.push("blockers");
+  if (patch.progress !== undefined) fields.push("progress");
+  if (patch.links) fields.push("links");
+
+  const now = new Date().toISOString();
+  const nextRevision = ((snap.get("revision") as number | undefined) ?? 1) + 1;
+
+  await ref.update({
+    ...(patch.thisWeekGoals ? { thisWeekGoals: patch.thisWeekGoals } : {}),
+    ...(patch.nextWeekGoals ? { nextWeekGoals: patch.nextWeekGoals } : {}),
+    ...(patch.links ? { links: patch.links } : {}),
+    ...(patch.blockers !== undefined ? { blockers: (patch.blockers ?? "").toString() } : {}),
+    ...(patch.progress !== undefined ? { progress: Number.isFinite(Number(patch.progress)) ? Number(patch.progress) : 0 } : {}),
+    status: "pending",
+    submittedAt: now,
+    revision: nextRevision,
+    lastEditedAt: now,
+    lastEditedBy: u.id,
+    audit: [
+      ...(((snap.get("audit") as any[]) ?? []) as any[]),
+      { id: uid("evt"), type: "resubmitted", at: now, byUserId: u.id, fields },
+    ],
+  });
+
+  if (patch.progress !== undefined) {
+    await db.collection("projects").doc(projectId).update({ progress: Number(patch.progress) }).catch(() => {});
+  }
+
+  return res.json({ ok: true });
+});
+
+app.patch("/updates/:id/status", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
+  const u = (req as any).appUser as { id?: string; role?: string } | undefined;
+  if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const updateId = req.params.id;
+  const { status } = (req.body ?? {}) as { status?: "pending" | "needs_revision" | "approved" };
+  if (status !== "pending" && status !== "needs_revision" && status !== "approved") {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+
+  const db = getFirestore();
+  const ref = db.collection("updates").doc(updateId);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Update not found" });
+
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const prev = (snap.get("status") as string | undefined) ?? "pending";
+  if (prev === "approved") return res.status(400).json({ error: "Approved updates are locked" });
+
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+  const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+
+  // Instructors can only review updates for courses they are assigned to.
+  (req.params as any).id = courseId;
+  await new Promise<void>((resolve) =>
+    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
+      if (err) throw err;
+      resolve();
+    }),
+  );
+  if (res.headersSent) return;
+
+  const now = new Date().toISOString();
+  await ref.update({
+    status,
+    lastEditedAt: now,
+    lastEditedBy: u.id,
+    audit: [
+      ...(((snap.get("audit") as any[]) ?? []) as any[]),
+      { id: uid("evt"), type: "status_changed", at: now, byUserId: u.id, statusFrom: prev, statusTo: status },
+    ],
+  });
+
+  return res.json({ ok: true });
+});
+
+app.post("/updates/:id/comments", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const updateId = req.params.id;
+  const { text } = (req.body ?? {}) as { text?: string };
+  if (!text?.trim()) return res.status(400).json({ error: "text is required" });
+
+  const db = getFirestore();
+  const ref = db.collection("updates").doc(updateId);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Update not found" });
+
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+
+  const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
+  const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+  const instructorIds = ((await db.collection("courses").doc(courseId).get()).get("instructorIds") as string[] | undefined) ?? [];
+
+  const canComment = studentIds.includes(u.id) || instructorIds.includes(u.id) || u.role === "admin";
+  if (!canComment) return res.status(403).json({ error: "Not allowed to comment on this update" });
+
+  const commentId = uid("c");
+  const now = new Date().toISOString();
+  const comments = ((snap.get("comments") as any[]) ?? []) as any[];
+  const nextComments = [...comments, { id: commentId, authorId: u.id, text: text.trim(), createdAt: now }];
+
+  await ref.update({
+    comments: nextComments,
+    audit: [
+      ...(((snap.get("audit") as any[]) ?? []) as any[]),
+      { id: uid("evt"), type: "comment_added", at: now, byUserId: u.id, commentId },
+    ],
+  });
+
+  return res.json({ ok: true, id: commentId });
+});
+
+app.post("/purchaseRequests", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const body = (req.body ?? {}) as any;
+  const projectId = (body.projectId ?? "").toString().trim();
+  const item = (body.item ?? "").toString().trim();
+  const justification = (body.justification ?? "").toString().trim();
+
+  if (!projectId) return res.status(400).json({ error: "projectId is required" });
+  if (!item) return res.status(400).json({ error: "item is required" });
+  if (!justification) return res.status(400).json({ error: "justification is required" });
+
+  const db = getFirestore();
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+  const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
+  if (!studentIds.includes(u.id)) return res.status(403).json({ error: "Only project students can request purchases" });
+
+  const id = uid("pr");
+  const now = new Date().toISOString();
+  await db.collection("purchaseRequests").doc(id).set({
+    id,
+    projectId,
+    requesterId: u.id,
+    item,
+    quantity: Number.isFinite(Number(body.quantity)) ? Number(body.quantity) : 1,
+    cost: Number.isFinite(Number(body.cost)) ? Number(body.cost) : 0,
+    currency: "HKD",
+    link: (body.link ?? "").toString(),
+    justification,
+    status: "pending",
+    createdAt: now,
+  });
+
+  return res.json({ ok: true, id });
+});
+
+app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
+  const reviewer = (req as any).appUser as { id?: string; role?: string } | undefined;
+  if (!reviewer?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const id = req.params.id;
+  const { status, reviewNote } = (req.body ?? {}) as { status?: "approved" | "rejected"; reviewNote?: string };
+  if (status !== "approved" && status !== "rejected") return res.status(400).json({ error: "Invalid status" });
+
+  const db = getFirestore();
+  const ref = db.collection("purchaseRequests").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Purchase request not found" });
+  const existingStatus = (snap.get("status") as string | undefined) ?? "pending";
+  if (existingStatus !== "pending") return res.status(400).json({ error: "Locked after decision" });
+
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+  const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+
+  (req.params as any).id = courseId;
+  await new Promise<void>((resolve) =>
+    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
+      if (err) throw err;
+      resolve();
+    }),
+  );
+  if (res.headersSent) return;
+
+  const now = new Date().toISOString();
+  await ref.update({
+    status,
+    reviewerId: reviewer.id,
+    reviewedAt: now,
+    reviewNote: reviewNote?.trim() ? reviewNote.trim() : null,
+  });
   return res.json({ ok: true });
 });
 

@@ -18,6 +18,9 @@ const Login = () => {
   const emailRef = useRef<HTMLInputElement | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [hkustEmail, setHkustEmail] = useState("");
+  const [programme, setProgramme] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
@@ -33,8 +36,14 @@ const Login = () => {
     await fetch(`${backendUrl.replace(/\/$/, "")}/users/ensure`, {
       method: "POST",
       headers: {
+        "content-type": "application/json",
         authorization: `Bearer ${token}`,
       },
+      body: JSON.stringify({
+        name: fullName.trim(),
+        hkustEmail: hkustEmail.trim(),
+        programme: programme.trim(),
+      }),
     });
   };
 
@@ -172,6 +181,49 @@ const Login = () => {
                     if (e.key === "Enter") void handleSignIn();
                   }}
                 />
+              </div>
+
+              <div className="rounded-md border border-border bg-gradient-subtle p-4">
+                <div className="mb-2 text-sm font-semibold text-foreground">First time here?</div>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  If you’re signing up with a magic link, please fill in your profile details.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
+                      Full name (Surname, First name)
+                    </Label>
+                    <Input
+                      id="fullName"
+                      placeholder="CHAN, Tai Man"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="hkustEmail" className="text-sm font-medium text-foreground">
+                      HKUST email (optional)
+                    </Label>
+                    <Input
+                      id="hkustEmail"
+                      type="email"
+                      placeholder="name@connect.ust.hk"
+                      value={hkustEmail}
+                      onChange={(e) => setHkustEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="programme" className="text-sm font-medium text-foreground">
+                      Programme
+                    </Label>
+                    <Input
+                      id="programme"
+                      placeholder="e.g. BEng, BBA, MSc FinTech, etc."
+                      value={programme}
+                      onChange={(e) => setProgramme(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
 
               {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}

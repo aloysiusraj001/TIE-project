@@ -98,6 +98,13 @@ export const useApp = create<AppState>()((set, get) => {
     return u?.role ?? null;
   };
 
+  const authHeader = async () => {
+    const fbUser = firebaseAuth.currentUser;
+    if (!fbUser) throw new Error("Not signed in.");
+    const token = await fbUser.getIdToken();
+    return { authorization: `Bearer ${token}` };
+  };
+
   const ensureSeeded = async () => {
     const usersCol = collection(firestore, "users");
     const cnt = await getCountFromServer(usersCol);
@@ -454,6 +461,25 @@ export const useApp = create<AppState>()((set, get) => {
 
     // updates
     submitUpdate: (u) => {
+      // In production, writes should go through backend.
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/updates`;
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify(u),
+          });
+          if (!res.ok) throw new Error(`Submit update failed (${res.status})`);
+        })().catch(() => {
+          // UI already shows optimistic toast; realtime listener will reconcile state.
+        });
+        return;
+      }
+
       const id = uid("w");
       const thisWeekGoals = (u.thisWeekGoals ?? []).map((g) => ({
         id: g.id,
@@ -498,6 +524,22 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
     resubmitUpdate: (updateId, patch) => {
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/updates/${encodeURIComponent(updateId)}/resubmit`;
+          const res = await fetch(endpoint, {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify(patch),
+          });
+          if (!res.ok) throw new Error(`Resubmit update failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
       const editorId = get().currentUserId ?? "unknown";
       const at = new Date().toISOString();
       const fields: WeeklyUpdateEvent["fields"] = [];
@@ -541,6 +583,23 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
     editUpdateGoals: (updateId, thisWeekGoals, nextWeekGoals) => {
+      if (backendUrl) {
+        // Reviewers should edit via UI + status/comment flows; keep direct goal edits local-dev only.
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/updates/${encodeURIComponent(updateId)}/resubmit`;
+          const res = await fetch(endpoint, {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify({ thisWeekGoals, nextWeekGoals }),
+          });
+          if (!res.ok) throw new Error(`Edit update failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
       const editorId = get().currentUserId ?? "unknown";
       const at = new Date().toISOString();
       void updateDoc(doc(firestore, "updates", updateId), { thisWeekGoals, nextWeekGoals });
@@ -555,8 +614,25 @@ export const useApp = create<AppState>()((set, get) => {
     },
     setApproval: (updateId, status) => {
       const editorId = get().currentUserId ?? "unknown";
-      const at = new Date().toISOString();
       const prev = get().updates.find((u) => u.id === updateId)?.status;
+
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/updates/${encodeURIComponent(updateId)}/status`;
+          const res = await fetch(endpoint, {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify({ status }),
+          });
+          if (!res.ok) throw new Error(`Set status failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
+      const at = new Date().toISOString();
       void updateDoc(doc(firestore, "updates", updateId), { status });
       logUpdateEvent(updateId, {
         id: uid("evt"),
@@ -570,6 +646,23 @@ export const useApp = create<AppState>()((set, get) => {
     addComment: (updateId, authorId, text) => {
       const update = get().updates.find((u) => u.id === updateId);
       if (!update) return;
+
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/updates/${encodeURIComponent(updateId)}/comments`;
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify({ text }),
+          });
+          if (!res.ok) throw new Error(`Add comment failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
       const commentId = uid("c");
       const comments: Comment[] = [
         ...update.comments,
@@ -589,6 +682,22 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     submitPurchaseRequest: (p) => {
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/purchaseRequests`;
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify(p),
+          });
+          if (!res.ok) throw new Error(`Submit purchase request failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
       const id = uid("pr");
       const payload: PurchaseRequest = {
         id,
@@ -612,6 +721,23 @@ export const useApp = create<AppState>()((set, get) => {
       if (existing && existing.status !== "pending") return;
 
       const reviewerId = get().currentUserId;
+
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/purchaseRequests/${encodeURIComponent(id)}/review`;
+          const res = await fetch(endpoint, {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify({ status, reviewNote }),
+          });
+          if (!res.ok) throw new Error(`Review purchase request failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
       void updateDoc(doc(firestore, "purchaseRequests", id), {
         status,
         reviewerId: reviewerId ?? null,

@@ -52,6 +52,8 @@ interface AppState {
   addCourse: (c: Omit<Course, "id">) => Promise<void>;
   assignInstructor: (courseId: string, instructorId: string) => Promise<void>;
   removeInstructor: (courseId: string, instructorId: string) => Promise<void>;
+  addStudentToCourse: (courseId: string, studentId: string) => Promise<void>;
+  removeStudentFromCourse: (courseId: string, studentId: string) => Promise<void>;
   addProject: (p: Omit<Project, "id" | "progress">) => Promise<void>;
   assignStudentToProject: (projectId: string, studentId: string) => Promise<void>;
   removeStudentFromProject: (projectId: string, studentId: string) => Promise<void>;
@@ -89,6 +91,12 @@ const backendUrl =
 export const useApp = create<AppState>()((set, get) => {
   let unsubAuth: Unsubscribe | null = null;
   let unsubs: Unsubscribe[] = [];
+
+  const currentRole = () => {
+    const id = get().currentUserId;
+    const u = id ? get().users.find((x) => x.id === id) : undefined;
+    return u?.role ?? null;
+  };
 
   const ensureSeeded = async () => {
     const usersCol = collection(firestore, "users");
@@ -313,11 +321,67 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
 
+    addStudentToCourse: async (courseId, studentId) => {
+      const course = get().courses.find((c) => c.id === courseId);
+      const existing = (course?.studentIds ?? []) as string[];
+      if (!course || existing.includes(studentId)) return;
+
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/instructor/courses/${encodeURIComponent(courseId)}/students`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ studentId, op: "add" }),
+        });
+        if (!res.ok) throw new Error(`Backend add student to course failed (${res.status})`);
+        return;
+      }
+
+      await updateDoc(doc(firestore, "courses", courseId), {
+        studentIds: Array.from(new Set([...(existing ?? []), studentId])),
+      });
+    },
+
+    removeStudentFromCourse: async (courseId, studentId) => {
+      const course = get().courses.find((c) => c.id === courseId);
+      const existing = (course?.studentIds ?? []) as string[];
+      if (!course) return;
+
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/instructor/courses/${encodeURIComponent(courseId)}/students`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ studentId, op: "remove" }),
+        });
+        if (!res.ok) throw new Error(`Backend remove student from course failed (${res.status})`);
+        return;
+      }
+
+      await updateDoc(doc(firestore, "courses", courseId), {
+        studentIds: (existing ?? []).filter((i) => i !== studentId),
+      });
+    },
+
     addProject: async (p) => {
       const fbUser = firebaseAuth.currentUser;
       if (backendUrl && fbUser) {
         const token = await fbUser.getIdToken();
-        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/projects`;
+        const role = currentRole();
+        const endpoint =
+          role === "admin"
+            ? `${backendUrl.replace(/\/$/, "")}/admin/projects`
+            : `${backendUrl.replace(/\/$/, "")}/instructor/projects`;
         const res = await fetch(endpoint, {
           method: "POST",
           headers: {
@@ -339,7 +403,11 @@ export const useApp = create<AppState>()((set, get) => {
       const fbUser = firebaseAuth.currentUser;
       if (backendUrl && fbUser) {
         const token = await fbUser.getIdToken();
-        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/projects/${encodeURIComponent(projectId)}/students`;
+        const role = currentRole();
+        const endpoint =
+          role === "admin"
+            ? `${backendUrl.replace(/\/$/, "")}/admin/projects/${encodeURIComponent(projectId)}/students`
+            : `${backendUrl.replace(/\/$/, "")}/instructor/projects/${encodeURIComponent(projectId)}/students`;
         const res = await fetch(endpoint, {
           method: "PATCH",
           headers: {
@@ -362,7 +430,11 @@ export const useApp = create<AppState>()((set, get) => {
       const fbUser = firebaseAuth.currentUser;
       if (backendUrl && fbUser) {
         const token = await fbUser.getIdToken();
-        const endpoint = `${backendUrl.replace(/\/$/, "")}/admin/projects/${encodeURIComponent(projectId)}/students`;
+        const role = currentRole();
+        const endpoint =
+          role === "admin"
+            ? `${backendUrl.replace(/\/$/, "")}/admin/projects/${encodeURIComponent(projectId)}/students`
+            : `${backendUrl.replace(/\/$/, "")}/instructor/projects/${encodeURIComponent(projectId)}/students`;
         const res = await fetch(endpoint, {
           method: "PATCH",
           headers: {

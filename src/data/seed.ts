@@ -12,9 +12,30 @@ export const seedUsers: User[] = [
 ];
 
 export const seedCourses: Course[] = [
-  { id: "c1", code: "CS-490", name: "Senior Capstone", term: "Spring 2026", instructorIds: ["u-i1"] },
-  { id: "c2", code: "DSGN-310", name: "Interaction Design Studio", term: "Spring 2026", instructorIds: ["u-i2", "u-i1"] },
-  { id: "c3", code: "ENGR-450", name: "Engineering Innovation", term: "Spring 2026", instructorIds: ["u-i2"] },
+  {
+    id: "c1",
+    code: "CS-490",
+    name: "Senior Capstone",
+    term: "Spring 2026",
+    instructorIds: ["u-i1"],
+    studentIds: ["u-s1", "u-s2", "u-s3", "u-s4", "u-s5"],
+  },
+  {
+    id: "c2",
+    code: "DSGN-310",
+    name: "Interaction Design Studio",
+    term: "Spring 2026",
+    instructorIds: ["u-i2", "u-i1"],
+    studentIds: ["u-s2", "u-s4"],
+  },
+  {
+    id: "c3",
+    code: "ENGR-450",
+    name: "Engineering Innovation",
+    term: "Spring 2026",
+    instructorIds: ["u-i2"],
+    studentIds: ["u-s1", "u-s5"],
+  },
 ];
 
 export const seedProjects: Project[] = [

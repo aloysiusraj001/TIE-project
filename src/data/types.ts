@@ -14,6 +14,8 @@ export interface Course {
   name: string;
   term: string;
   instructorIds: string[];
+  /** Optional for backward compatibility; treat missing as empty roster. */
+  studentIds?: string[];
 }
 
 export interface Project {

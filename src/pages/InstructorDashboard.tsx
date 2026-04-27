@@ -8,10 +8,12 @@ import { Avatar } from "@/components/Avatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { WeeklyUpdateCard } from "@/components/WeeklyUpdateCard";
 import { SegmentedTabs } from "@/components/SegmentedTabs";
-import { LayoutDashboard, BookOpen, ChevronRight, ArrowLeft, Users as UsersIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { LayoutDashboard, BookOpen, ChevronRight, ArrowLeft, Users as UsersIcon, Plus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 type InstructorTab = "projects" | "pending" | "courses";
@@ -24,17 +26,26 @@ const InstructorDashboard = () => {
   const users = useApp((s) => s.users);
   const purchaseRequests = useApp((s) => s.purchaseRequests);
   const reviewPurchaseRequest = useApp((s) => s.reviewPurchaseRequest);
+  const addStudentToCourse = useApp((s) => s.addStudentToCourse);
+  const removeStudentFromCourse = useApp((s) => s.removeStudentFromCourse);
+  const addProject = useApp((s) => s.addProject);
+  const assignStudentToProject = useApp((s) => s.assignStudentToProject);
+  const removeStudentFromProject = useApp((s) => s.removeStudentFromProject);
   const money = new Intl.NumberFormat("en-HK", { style: "currency", currency: "HKD" });
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InstructorTab>("projects");
   const [prNotes, setPrNotes] = useState<Record<string, string>>({});
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectDesc, setNewProjectDesc] = useState("");
+  const [newProjectCourseId, setNewProjectCourseId] = useState<string>("");
 
   const courses = allCourses.filter((c) => c.instructorIds.includes(user.id));
   const myProjects = projects.filter((p) => courses.some((c) => c.id === p.courseId));
   const myUpdates = updates.filter((u) => myProjects.some((p) => p.id === u.projectId));
   const pendingUpdates = myUpdates.filter((u) => u.status === "pending");
   const pending = pendingUpdates.length;
+  const students = users.filter((u) => u.role === "student");
 
   const nav = [{ to: "/instructor", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
 
@@ -80,6 +91,74 @@ const InstructorDashboard = () => {
               <span className="font-serif font-semibold text-primary">{progressNow}%</span>
             </div>
           </div>
+
+          <Card className="academic-card mt-5 p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-xl font-semibold text-foreground">Team</h2>
+                <p className="text-sm text-muted-foreground">Assign students to this project from the course roster.</p>
+              </div>
+              <Select
+                onValueChange={async (studentId) => {
+                  try {
+                    await assignStudentToProject(project.id, studentId);
+                    toast.success("Student added to project.");
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : "Unknown error";
+                    toast.error(`Could not add student: ${msg}`);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-72">
+                  <SelectValue placeholder="Add student to project…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(course?.studentIds ?? [])
+                    .map((sid) => students.find((s) => s.id === sid))
+                    .filter((s): s is NonNullable<typeof s> => !!s)
+                    .filter((s) => !project.studentIds.includes(s.id))
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {project.studentIds.map((sid) => {
+                const s = users.find((u) => u.id === sid);
+                if (!s) return null;
+                return (
+                  <span
+                    key={sid}
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                  >
+                    <Avatar userId={sid} size={20} />
+                    {s.name}
+                    <button
+                      onClick={async () => {
+                        try {
+                          await removeStudentFromProject(project.id, sid);
+                          toast.success("Student removed from project.");
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not remove student: ${msg}`);
+                        }
+                      }}
+                      className="ml-1 text-muted-foreground hover:text-destructive"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+              {project.studentIds.length === 0 ? (
+                <span className="text-xs text-muted-foreground">No students assigned yet.</span>
+              ) : null}
+            </div>
+          </Card>
 
           <div className="mt-8">
             <h2 className="mb-4 font-serif text-xl font-semibold text-foreground">Weekly updates ({projectUpdates.length})</h2>
@@ -285,21 +364,180 @@ const InstructorDashboard = () => {
         )}
 
         {activeTab === "courses" && (
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {courses.map((c) => {
-              const cProjects = projects.filter((p) => p.courseId === c.id);
-              return (
-                <Card key={c.id} className="academic-card p-5">
-                  <Badge variant="secondary" className="mb-2">{c.code}</Badge>
-                  <h3 className="font-serif text-lg font-semibold text-foreground">{c.name}</h3>
-                  <p className="text-xs text-muted-foreground">{c.term}</p>
-                  <div className="mt-4 flex items-center gap-2 text-sm">
-                    <BookOpen className="h-4 w-4 text-primary" />
-                    {cProjects.length} project{cProjects.length === 1 ? "" : "s"}
-                  </div>
-                </Card>
-              );
-            })}
+          <div className="mt-5 space-y-5">
+            <Card className="academic-card p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-serif text-xl font-semibold text-foreground">Create a new project</h2>
+                  <p className="text-sm text-muted-foreground">Projects you create here will belong to your assigned courses.</p>
+                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="mr-1.5 h-4 w-4" /> New project
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create project</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label>Course</Label>
+                        <Select value={newProjectCourseId} onValueChange={setNewProjectCourseId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select course" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {courses.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.code} — {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Project name</Label>
+                        <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Description</Label>
+                        <Textarea value={newProjectDesc} onChange={(e) => setNewProjectDesc(e.target.value)} rows={3} />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        onClick={async () => {
+                          if (!newProjectCourseId || !newProjectName.trim()) {
+                            toast.error("Course and project name are required.");
+                            return;
+                          }
+                          try {
+                            await addProject({
+                              name: newProjectName.trim(),
+                              description: newProjectDesc,
+                              courseId: newProjectCourseId,
+                              studentIds: [],
+                            });
+                            setNewProjectName("");
+                            setNewProjectDesc("");
+                            setNewProjectCourseId("");
+                            toast.success("Project created.");
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Unknown error";
+                            toast.error(`Could not create project: ${msg}`);
+                          }
+                        }}
+                      >
+                        Create project
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </Card>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {courses.map((c) => {
+                const cProjects = projects.filter((p) => p.courseId === c.id);
+                const roster = (c.studentIds ?? []) as string[];
+                const rosterStudents = roster.map((sid) => students.find((s) => s.id === sid)).filter(Boolean);
+                const candidates = students.filter((s) => !roster.includes(s.id));
+
+                return (
+                  <Card key={c.id} className="academic-card p-5">
+                    <Badge variant="secondary" className="mb-2">{c.code}</Badge>
+                    <h3 className="font-serif text-lg font-semibold text-foreground">{c.name}</h3>
+                    <p className="text-xs text-muted-foreground">{c.term}</p>
+
+                    <div className="mt-4 flex items-center gap-2 text-sm">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      {cProjects.length} project{cProjects.length === 1 ? "" : "s"}
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">{roster.length} students in course</span>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Course students</div>
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {rosterStudents.map((s) => {
+                          if (!s) return null;
+                          return (
+                            <span
+                              key={s.id}
+                              className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                            >
+                              <Avatar userId={s.id} size={20} />
+                              {s.name}
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await removeStudentFromCourse(c.id, s.id);
+                                    toast.success("Student removed from course.");
+                                  } catch (e) {
+                                    const msg = e instanceof Error ? e.message : "Unknown error";
+                                    toast.error(`Could not remove student: ${msg}`);
+                                  }
+                                }}
+                                className="ml-1 text-muted-foreground hover:text-destructive"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                        {roster.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">No students added yet.</span>
+                        ) : null}
+                      </div>
+
+                      <Select
+                        onValueChange={async (sid) => {
+                          try {
+                            await addStudentToCourse(c.id, sid);
+                            toast.success("Student added to course.");
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Unknown error";
+                            toast.error(`Could not add student: ${msg}`);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Add student to course…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {candidates.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="mt-5">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Projects</div>
+                      <div className="space-y-2">
+                        {cProjects.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => setSelectedProjectId(p.id)}
+                            className="flex w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-left text-sm hover:border-primary"
+                          >
+                            <span className="font-medium text-foreground">{p.name}</span>
+                            <span className="text-xs text-muted-foreground">{p.studentIds.length} students</span>
+                          </button>
+                        ))}
+                        {cProjects.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">No projects yet.</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

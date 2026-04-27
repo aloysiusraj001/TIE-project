@@ -52,6 +52,7 @@ const InstructorDashboard = () => {
   if (selectedProjectId) {
     const project = projects.find((p) => p.id === selectedProjectId)!;
     const course = courses.find((c) => c.id === project.courseId);
+    const rosterIds = [...(course?.studentIds ?? [])];
     const projectUpdates = updates
       .filter((u) => u.projectId === project.id)
       .sort((a, b) => b.weekNumber - a.weekNumber);
@@ -113,7 +114,7 @@ const InstructorDashboard = () => {
                   <SelectValue placeholder="Add student to project…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(course?.studentIds ?? [])
+                  {rosterIds
                     .map((sid) => students.find((s) => s.id === sid))
                     .filter((s): s is NonNullable<typeof s> => !!s)
                     .filter((s) => !project.studentIds.includes(s.id))

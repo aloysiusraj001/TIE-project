@@ -202,6 +202,14 @@ app.post("/admin/projects", requireFirebaseAuth, requireAdminRole, async (req, r
 
   const id = uid("p");
   const db = getFirestore();
+  const courseSnap = await db.collection("courses").doc(courseId.trim()).get();
+  if (!courseSnap.exists) return res.status(404).json({ error: "Course not found" });
+  const courseRoster = (courseSnap.get("studentIds") as string[] | undefined) ?? [];
+  const notInCourse = students.filter((sid) => !courseRoster.includes(sid));
+  if (notInCourse.length) {
+    return res.status(400).json({ error: "Add student(s) to the course first before assigning to a project." });
+  }
+
   await db.collection("projects").doc(id).set({
     id,
     name: name.trim(),
@@ -249,6 +257,18 @@ app.patch("/admin/projects/:id/students", requireFirebaseAuth, requireAdminRole,
   if (!snap.exists) return res.status(404).json({ error: "Project not found" });
 
   const studentIds = (snap.get("studentIds") as string[] | undefined) ?? [];
+  const courseId = (snap.get("courseId") as string | undefined) ?? "";
+  if (!courseId.trim()) return res.status(400).json({ error: "Project missing courseId" });
+
+  // Enforce clean flow: students must be added to course roster first.
+  if (op === "add") {
+    const courseSnap = await db.collection("courses").doc(courseId.trim()).get();
+    if (!courseSnap.exists) return res.status(404).json({ error: "Course not found" });
+    const courseRoster = (courseSnap.get("studentIds") as string[] | undefined) ?? [];
+    if (!courseRoster.includes(studentId.trim())) {
+      return res.status(400).json({ error: "Add student to the course first." });
+    }
+  }
   const next =
     op === "add"
       ? Array.from(new Set([...studentIds, studentId.trim()]))
@@ -283,6 +303,14 @@ app.post("/instructor/projects", requireFirebaseAuth, requireInstructorOrAdmin, 
   const students = Array.isArray(studentIds) ? (studentIds.filter((x) => typeof x === "string") as string[]) : [];
   const id = uid("p");
   const db = getFirestore();
+  const courseSnap = await db.collection("courses").doc(courseId.trim()).get();
+  if (!courseSnap.exists) return res.status(404).json({ error: "Course not found" });
+  const courseRoster = (courseSnap.get("studentIds") as string[] | undefined) ?? [];
+  const notInCourse = students.filter((sid) => !courseRoster.includes(sid));
+  if (notInCourse.length) {
+    return res.status(400).json({ error: "Add student(s) to the course first before assigning to a project." });
+  }
+
   await db.collection("projects").doc(id).set({
     id,
     name: name.trim(),
@@ -346,6 +374,15 @@ app.patch("/instructor/projects/:id/students", requireFirebaseAuth, requireInstr
   if (res.headersSent) return;
 
   const studentIds = (snap.get("studentIds") as string[] | undefined) ?? [];
+  // Enforce clean flow: students must be added to course roster first.
+  if (op === "add") {
+    const courseSnap = await db.collection("courses").doc(courseId.trim()).get();
+    if (!courseSnap.exists) return res.status(404).json({ error: "Course not found" });
+    const courseRoster = (courseSnap.get("studentIds") as string[] | undefined) ?? [];
+    if (!courseRoster.includes(studentId.trim())) {
+      return res.status(400).json({ error: "Add student to the course first." });
+    }
+  }
   const next =
     op === "add"
       ? Array.from(new Set([...studentIds, studentId.trim()]))

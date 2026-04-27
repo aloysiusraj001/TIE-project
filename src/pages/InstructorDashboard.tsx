@@ -39,6 +39,8 @@ const InstructorDashboard = () => {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [newProjectCourseId, setNewProjectCourseId] = useState<string>("");
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const courses = allCourses.filter((c) => c.instructorIds.includes(user.id));
   const myProjects = projects.filter((p) => courses.some((c) => c.id === p.courseId));
@@ -372,7 +374,7 @@ const InstructorDashboard = () => {
                   <h2 className="font-serif text-xl font-semibold text-foreground">Create a new project</h2>
                   <p className="text-sm text-muted-foreground">Projects you create here will belong to your assigned courses.</p>
                 </div>
-                <Dialog>
+                <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
                   <DialogTrigger asChild>
                     <Button>
                       <Plus className="mr-1.5 h-4 w-4" /> New project
@@ -409,12 +411,15 @@ const InstructorDashboard = () => {
                     </div>
                     <DialogFooter>
                       <Button
+                        disabled={creatingProject}
                         onClick={async () => {
                           if (!newProjectCourseId || !newProjectName.trim()) {
                             toast.error("Course and project name are required.");
                             return;
                           }
+                          if (creatingProject) return;
                           try {
+                            setCreatingProject(true);
                             await addProject({
                               name: newProjectName.trim(),
                               description: newProjectDesc,
@@ -425,13 +430,16 @@ const InstructorDashboard = () => {
                             setNewProjectDesc("");
                             setNewProjectCourseId("");
                             toast.success("Project created.");
+                            setCreateProjectOpen(false);
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : "Unknown error";
                             toast.error(`Could not create project: ${msg}`);
+                          } finally {
+                            setCreatingProject(false);
                           }
                         }}
                       >
-                        Create project
+                        {creatingProject ? "Creating..." : "Create project"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>

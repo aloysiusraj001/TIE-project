@@ -105,6 +105,10 @@ const Login = () => {
       setError("Enter your email first (Email or HKUST email).");
       return;
     }
+    if (!e.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
     try {
       setBusy(true);
       const actionCodeSettings = {
@@ -112,9 +116,11 @@ const Login = () => {
         handleCodeInApp: true,
       };
       await sendSignInLinkToEmail(firebaseAuth, e, actionCodeSettings);
+      // Make it explicit which address we used for the sign-in link.
+      if (!email.trim()) setEmail(e);
       window.localStorage.setItem("magicLinkEmail", e);
       setMagicSent(true);
-      toast.success("Magic link sent. Check your email (and spam/junk).");
+      toast.success(`Magic link sent to ${e}. Check inbox + spam/junk.`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not send magic link.";
       setError(`${msg} Check Firebase Auth settings for Email Link sign-in.`);

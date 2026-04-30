@@ -539,6 +539,70 @@ app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
   return res.json({ ok: true });
 });
 
+// Reviewer edits (instructor/admin): allow adjusting fields like progress without resubmission constraints.
+app.patch("/updates/:id/reviewerEdit", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
+  const u = (req as any).appUser as { id?: string; role?: string } | undefined;
+  if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
+
+  const updateId = req.params.id;
+  const patch = (req.body ?? {}) as any;
+
+  const db = getFirestore();
+  const ref = db.collection("updates").doc(updateId);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Update not found" });
+
+  const prevStatus = (snap.get("status") as string | undefined) ?? "pending";
+  if (prevStatus === "approved") return res.status(400).json({ error: "Approved updates are locked" });
+
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  if (!projectId.trim()) return res.status(400).json({ error: "Update missing projectId" });
+
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+  const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+
+  // Instructors can only edit updates for courses they are assigned to.
+  (req.params as any).id = courseId;
+  await new Promise<void>((resolve) =>
+    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
+      if (err) throw err;
+      resolve();
+    }),
+  );
+  if (res.headersSent) return;
+
+  const fields: string[] = [];
+  if (patch.thisWeekGoals) fields.push("thisWeekGoals");
+  if (patch.nextWeekGoals) fields.push("nextWeekGoals");
+  if (patch.blockers !== undefined) fields.push("blockers");
+  if (patch.progress !== undefined) fields.push("progress");
+  if (patch.links) fields.push("links");
+  if (fields.length === 0) return res.status(400).json({ error: "No editable fields provided" });
+
+  const now = new Date().toISOString();
+  const nextPatch: Record<string, unknown> = {
+    ...(patch.thisWeekGoals ? { thisWeekGoals: patch.thisWeekGoals } : {}),
+    ...(patch.nextWeekGoals ? { nextWeekGoals: patch.nextWeekGoals } : {}),
+    ...(patch.links ? { links: patch.links } : {}),
+    ...(patch.blockers !== undefined ? { blockers: (patch.blockers ?? "").toString() } : {}),
+    ...(patch.progress !== undefined ? { progress: Number.isFinite(Number(patch.progress)) ? Number(patch.progress) : 0 } : {}),
+    lastEditedAt: now,
+    lastEditedBy: u.id,
+    audit: [
+      ...(((snap.get("audit") as any[]) ?? []) as any[]),
+      { id: uid("evt"), type: "edited", at: now, byUserId: u.id, fields, note: "Edited by reviewer" },
+    ],
+  };
+
+  await ref.update(nextPatch);
+  if (patch.progress !== undefined) {
+    await db.collection("projects").doc(projectId).update({ progress: Number(nextPatch.progress) }).catch(() => {});
+  }
+
+  return res.json({ ok: true });
+});
+
 app.patch("/updates/:id/status", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
   const u = (req as any).appUser as { id?: string; role?: string } | undefined;
   if (!u?.id) return res.status(403).json({ error: "Missing user profile" });

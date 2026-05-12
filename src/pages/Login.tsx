@@ -79,11 +79,18 @@ const Login = () => {
 
     const finishFromLink = async (addr: string) => {
       setBusy(true);
+      const emailForLink = addr.trim().toLowerCase();
       try {
-        await signInWithEmailLink(firebaseAuth, href, addr);
+        await signInWithEmailLink(firebaseAuth, href, emailForLink);
         window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
         window.history.replaceState({}, document.title, `${window.location.origin}/login`);
-        await ensureUserRow();
+        try {
+          await ensureUserRow();
+        } catch {
+          toast.error("Signed in, but profile sync failed. Refresh the page or try again.");
+          navigate("/");
+          return;
+        }
         toast.success("Signed in with email link.");
         navigate("/");
       } catch {
@@ -171,7 +178,7 @@ const Login = () => {
         url: `${window.location.origin}/login`,
         handleCodeInApp: true,
       });
-      window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, addr);
+      window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, addr.trim().toLowerCase());
       toast.success("Check your inbox for the sign-in link.");
       setForgotOpen(false);
     } catch (e) {
@@ -197,7 +204,7 @@ const Login = () => {
     }
     try {
       setConfirmBusy(true);
-      await signInWithEmailLink(firebaseAuth, href, addr);
+      await signInWithEmailLink(firebaseAuth, href, addr.trim().toLowerCase());
       window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
       window.history.replaceState({}, document.title, `${window.location.origin}/login`);
       await ensureUserRow();

@@ -104,7 +104,7 @@ const Login = () => {
     }
     setBusy(true);
     try {
-      await signInWithEmailLink(firebaseAuth, href, addr);
+      await signInWithEmailLink(firebaseAuth, addr, href);
       window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
       window.history.replaceState({}, document.title, `${window.location.origin}/login`);
       setMagicLink(null);

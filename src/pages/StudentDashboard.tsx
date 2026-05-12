@@ -62,6 +62,10 @@ const StudentDashboard = () => {
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [track, setTrack] = useState<AdvisorTrack>("general");
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [agendaDraft, setAgendaDraft] = useState<MeetingItem[]>([]);
+  const [actionsDraft, setActionsDraft] = useState<MeetingItem[]>([]);
   const [prItem, setPrItem] = useState("");
   const [prQty, setPrQty] = useState(1);
   const [prCost, setPrCost] = useState(0);
@@ -72,8 +76,30 @@ const StudentDashboard = () => {
   const nav = [{ to: "/student", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
   const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
 
+  const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
+  const projectMeetings = useMemo(() => {
+    if (!selectedProject) return [];
+    return meetings
+      .filter((m) => m.projectId === selectedProject.id && m.advisorTrack === track)
+      .sort((a, b) => (a.sequence < b.sequence ? 1 : -1));
+  }, [meetings, selectedProject?.id, track]);
+  const selectedMeeting: Meeting | undefined =
+    projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
+
+  useEffect(() => {
+    // When switching projects or tracks, default to newest meeting.
+    setSelectedMeetingId(selectedMeeting?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, track]);
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    setAgendaDraft(selectedMeeting?.agendaItems?.length ? selectedMeeting.agendaItems : [newMeetingItem("", user.id)]);
+    setActionsDraft(selectedMeeting?.actionItems?.length ? selectedMeeting.actionItems : [newMeetingItem("", user.id)]);
+  }, [selectedProject?.id, selectedMeeting?.id, meetings, user.id]);
+
   if (selectedProjectId) {
-    const project = projects.find((p) => p.id === selectedProjectId)!;
+    const project = selectedProject!;
     const course = courses.find((c) => c.id === project.courseId);
     const projectUpdates = updates
       .filter((u) => u.projectId === project.id)
@@ -84,30 +110,6 @@ const StudentDashboard = () => {
       .filter((r) => r.projectId === project.id)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     const daysSince = lastUpdate ? differenceInDays(new Date(), new Date(lastUpdate.submittedAt)) : null;
-
-    const [track, setTrack] = useState<AdvisorTrack>("general");
-    const projectMeetings = useMemo(
-      () =>
-        meetings
-          .filter((m) => m.projectId === project.id && m.advisorTrack === track)
-          .sort((a, b) => (a.sequence < b.sequence ? 1 : -1)),
-      [meetings, project.id, track],
-    );
-    const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
-    const selectedMeeting: Meeting | undefined = projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
-
-    useEffect(() => {
-      setSelectedMeetingId(selectedMeeting?.id ?? null);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [track]);
-
-    const [agendaDraft, setAgendaDraft] = useState<MeetingItem[]>([]);
-    const [actionsDraft, setActionsDraft] = useState<MeetingItem[]>([]);
-
-    useEffect(() => {
-      setAgendaDraft(selectedMeeting?.agendaItems?.length ? selectedMeeting.agendaItems : [newMeetingItem("", user.id)]);
-      setActionsDraft(selectedMeeting?.actionItems?.length ? selectedMeeting.actionItems : [newMeetingItem("", user.id)]);
-    }, [selectedMeeting?.id, meetings, user.id]);
 
     return (
       <AppShell roleLabel="Student" nav={nav}>

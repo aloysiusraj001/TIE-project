@@ -119,6 +119,7 @@ const Login = () => {
       navigate("/");
     } catch (e) {
       const code = authErrorCode(e);
+      const hint = code ? ` (${code})` : "";
       console.warn("signInWithEmailLink failed", code, e);
       if (code === "auth/invalid-action-code" || code === "auth/expired-action-code") {
         toast.error(
@@ -128,11 +129,23 @@ const Login = () => {
         window.history.replaceState({}, document.title, `${window.location.origin}/login`);
       } else if (code === "auth/invalid-email") {
         toast.error("That email address is not valid. Check for typos.");
+      } else if (code === "auth/invalid-credential") {
+        toast.error(
+          "The email must exactly match the address you requested the link for (same spelling, no extra spaces). If it still fails, send a new magic link.",
+        );
       } else if (code === "auth/unauthorized-continue-uri" || code === "auth/invalid-continue-uri") {
         toast.error("This site’s URL is not allowed for email links. Add this domain under Firebase Authentication → Settings → Authorized domains.");
+      } else if (code === "auth/network-request-failed") {
+        toast.error("Network error while contacting Firebase. Check your connection and try again.");
+      } else if (code === "auth/too-many-requests") {
+        toast.error("Too many attempts. Wait a few minutes, then request a new link.");
+      } else if (code === "auth/operation-not-allowed") {
+        toast.error(
+          "Email link sign-in is not allowed for this project. In Firebase Console: Authentication → Sign-in method → Email/Password → enable “Email link (passwordless sign-in)”.",
+        );
       } else {
         toast.error(
-          "Could not complete sign-in. If you used a different email than the one in the box, correct it and try again. Otherwise request a new link.",
+          `Could not complete sign-in${hint}. Use the exact email the link was sent to, or request a new magic link. If this keeps happening, check the browser console for details.`,
         );
       }
     } finally {

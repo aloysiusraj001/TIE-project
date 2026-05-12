@@ -34,6 +34,34 @@ export type ApprovalStatus = "pending" | "approved" | "needs_revision";
 
 export type PurchaseRequestStatus = "pending" | "approved" | "rejected";
 
+export type AdvisorTrack = "general" | "technical" | "project" | "design";
+
+export interface MeetingItem {
+  id: string;
+  text: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type MeetingStatus = "draft" | "held";
+
+export interface Meeting {
+  id: string;
+  projectId: string;
+  advisorTrack: AdvisorTrack;
+  sequence: number;
+  status: MeetingStatus;
+  inheritedFromMeetingId?: string | null;
+  agendaItems: MeetingItem[];
+  actionItems: MeetingItem[];
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface WeeklyGoal {
   id: string;
   text: string;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useApp } from "@/data/store";
 import { Card } from "@/components/ui/card";
@@ -15,6 +15,35 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import type { AdvisorTrack, Meeting, MeetingItem } from "@/data/types";
+
+const trackLabels: Record<AdvisorTrack, string> = {
+  general: "General",
+  technical: "Technical",
+  project: "Project",
+  design: "Design",
+};
+
+const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
+  id: `mi-${Math.random().toString(36).slice(2, 9)}`,
+  text,
+  createdAt: new Date().toISOString(),
+  createdBy: byUserId,
+});
+
+function normalizeItems(items: MeetingItem[], byUserId: string): MeetingItem[] {
+  const now = new Date().toISOString();
+  return (items ?? [])
+    .map((x) => ({ ...x, text: (x.text ?? "").toString() }))
+    .map((x) => (x.text.trim() ? x : null))
+    .filter((x): x is MeetingItem => !!x)
+    .map((x) => ({
+      ...x,
+      text: x.text.trim(),
+      updatedAt: now,
+      updatedBy: byUserId,
+    }));
+}
 
 type InstructorTab = "projects" | "pending" | "courses";
 
@@ -26,6 +55,11 @@ const InstructorDashboard = () => {
   const users = useApp((s) => s.users);
   const purchaseRequests = useApp((s) => s.purchaseRequests);
   const reviewPurchaseRequest = useApp((s) => s.reviewPurchaseRequest);
+  const meetings = useApp((s) => s.meetings);
+  const createMeeting = useApp((s) => s.createMeeting);
+  const updateMeetingAgenda = useApp((s) => s.updateMeetingAgenda);
+  const updateMeetingActionItems = useApp((s) => s.updateMeetingActionItems);
+  const setMeetingStatus = useApp((s) => s.setMeetingStatus);
   const addStudentToCourse = useApp((s) => s.addStudentToCourse);
   const removeStudentFromCourse = useApp((s) => s.removeStudentFromCourse);
   const addProject = useApp((s) => s.addProject);
@@ -62,6 +96,30 @@ const InstructorDashboard = () => {
     const projectPRs = purchaseRequests
       .filter((r) => r.projectId === project.id)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+    const [track, setTrack] = useState<AdvisorTrack>("general");
+    const projectMeetings = useMemo(
+      () =>
+        meetings
+          .filter((m) => m.projectId === project.id && m.advisorTrack === track)
+          .sort((a, b) => (a.sequence < b.sequence ? 1 : -1)),
+      [meetings, project.id, track],
+    );
+    const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+    const selectedMeeting: Meeting | undefined = projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
+
+    useEffect(() => {
+      setSelectedMeetingId(selectedMeeting?.id ?? null);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [track]);
+
+    const [agendaDraft, setAgendaDraft] = useState<MeetingItem[]>([]);
+    const [actionsDraft, setActionsDraft] = useState<MeetingItem[]>([]);
+
+    useEffect(() => {
+      setAgendaDraft(selectedMeeting?.agendaItems?.length ? selectedMeeting.agendaItems : [newMeetingItem("", user.id)]);
+      setActionsDraft(selectedMeeting?.actionItems?.length ? selectedMeeting.actionItems : [newMeetingItem("", user.id)]);
+    }, [selectedMeeting?.id, meetings, user.id]);
 
     return (
       <AppShell roleLabel="Instructor" nav={nav}>
@@ -175,6 +233,214 @@ const InstructorDashboard = () => {
                 </Card>
               )}
             </div>
+          </div>
+
+          <div className="mt-10">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-xl font-semibold text-foreground">Meetings</h2>
+                <p className="text-sm text-muted-foreground">
+                  View and edit agendas/action items. Create new meetings (optionally inheriting prior action items).
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex rounded-lg border border-border bg-muted/40 p-1">
+                  {(Object.keys(trackLabels) as AdvisorTrack[]).map((t) => (
+                    <Button
+                      key={t}
+                      type="button"
+                      variant={track === t ? "secondary" : "ghost"}
+                      size="sm"
+                      onClick={() => setTrack(t)}
+                    >
+                      {trackLabels[t]}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const id = await createMeeting(project.id, track, false);
+                      toast.success("Meeting created.");
+                      setSelectedMeetingId(id);
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Unknown error";
+                      toast.error(`Could not create meeting: ${msg}`);
+                    }
+                  }}
+                >
+                  New meeting
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const id = await createMeeting(project.id, track, true);
+                      toast.success("Meeting created (inherited).");
+                      setSelectedMeetingId(id);
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Unknown error";
+                      toast.error(`Could not create meeting: ${msg}`);
+                    }
+                  }}
+                >
+                  New (inherit)
+                </Button>
+              </div>
+            </div>
+
+            <Card className="academic-card p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">
+                    {selectedMeeting ? `Meeting #${selectedMeeting.sequence}` : "No meetings yet"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {selectedMeeting ? `Created ${new Date(selectedMeeting.createdAt).toLocaleString()}` : "Create a meeting above."}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {projectMeetings.length > 0 ? (
+                    <select
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      value={selectedMeeting?.id ?? ""}
+                      onChange={(e) => setSelectedMeetingId(e.target.value)}
+                    >
+                      {projectMeetings.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          #{m.sequence} · {new Date(m.createdAt).toLocaleDateString()} · {m.status}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {selectedMeeting ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await setMeetingStatus(selectedMeeting.id, selectedMeeting.status === "held" ? "draft" : "held");
+                          toast.success("Meeting status updated.");
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not update status: ${msg}`);
+                        }
+                      }}
+                    >
+                      Mark as {selectedMeeting?.status === "held" ? "draft" : "held"}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              {selectedMeeting ? (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div>
+                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">Agenda</div>
+                    <div className="space-y-2">
+                      {agendaDraft.map((it, idx) => (
+                        <div key={it.id} className="flex items-center gap-2">
+                          <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
+                          <Input
+                            value={it.text}
+                            onChange={(e) =>
+                              setAgendaDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
+                            }
+                            placeholder="Agenda item…"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAgendaDraft((xs) => xs.filter((x) => x.id !== it.id))}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAgendaDraft((xs) => [...xs, newMeetingItem("", user.id)])}
+                        >
+                          Add agenda item
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await updateMeetingAgenda(selectedMeeting.id, normalizeItems(agendaDraft, user.id));
+                              toast.success("Agenda saved.");
+                            } catch (e) {
+                              const msg = e instanceof Error ? e.message : "Unknown error";
+                              toast.error(`Could not save agenda: ${msg}`);
+                            }
+                          }}
+                        >
+                          Save agenda
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">Action items</div>
+                    <div className="space-y-2">
+                      {actionsDraft.map((it, idx) => (
+                        <div key={it.id} className="flex items-center gap-2">
+                          <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
+                          <Input
+                            value={it.text}
+                            onChange={(e) =>
+                              setActionsDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
+                            }
+                            placeholder="Action item…"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setActionsDraft((xs) => xs.filter((x) => x.id !== it.id))}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActionsDraft((xs) => [...xs, newMeetingItem("", user.id)])}
+                        >
+                          Add action item
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await updateMeetingActionItems(selectedMeeting.id, normalizeItems(actionsDraft, user.id));
+                              toast.success("Action items saved.");
+                            } catch (e) {
+                              const msg = e instanceof Error ? e.message : "Unknown error";
+                              toast.error(`Could not save action items: ${msg}`);
+                            }
+                          }}
+                        >
+                          Save action items
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">Create a meeting to start drafting an agenda.</div>
+              )}
+            </Card>
           </div>
 
           <div className="mt-10">

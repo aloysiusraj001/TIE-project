@@ -14,8 +14,11 @@ import {
 import { onAuthStateChanged, signOut as fbSignOut } from "firebase/auth";
 import {
   ApprovalStatus,
+  AdvisorTrack,
   Comment,
   Course,
+  Meeting,
+  MeetingItem,
   Project,
   PurchaseRequest,
   PurchaseRequestStatus,
@@ -41,6 +44,7 @@ interface AppState {
   projects: Project[];
   updates: WeeklyUpdate[];
   purchaseRequests: PurchaseRequest[];
+  meetings: Meeting[];
 
   init: () => void;
   signOut: () => Promise<void>;
@@ -72,6 +76,12 @@ interface AppState {
   // purchasing (separate from weekly updates)
   submitPurchaseRequest: (p: Omit<PurchaseRequest, "id" | "createdAt" | "status">) => void;
   reviewPurchaseRequest: (id: string, status: PurchaseRequestStatus, reviewNote?: string) => void;
+
+  // meetings
+  createMeeting: (projectId: string, advisorTrack: AdvisorTrack, inheritFromLatest: boolean) => Promise<string>;
+  updateMeetingAgenda: (meetingId: string, agendaItems: MeetingItem[]) => Promise<void>;
+  updateMeetingActionItems: (meetingId: string, actionItems: MeetingItem[]) => Promise<void>;
+  setMeetingStatus: (meetingId: string, status: "draft" | "held") => Promise<void>;
 }
 
 const palette = [
@@ -150,6 +160,11 @@ export const useApp = create<AppState>()((set, get) => {
         set({ purchaseRequests: snap.docs.map((d) => d.data() as PurchaseRequest) });
       }),
     );
+    unsubs.push(
+      onSnapshot(collection(firestore, "meetings"), (snap) => {
+        set({ meetings: snap.docs.map((d) => d.data() as Meeting) });
+      }),
+    );
   };
 
   const logUpdateEvent = (updateId: string, e: WeeklyUpdateEvent) => {
@@ -171,6 +186,7 @@ export const useApp = create<AppState>()((set, get) => {
     projects: [],
     updates: [],
     purchaseRequests: [],
+    meetings: [],
 
     init: () => {
       if (get().initialized) return;
@@ -804,6 +820,65 @@ export const useApp = create<AppState>()((set, get) => {
         reviewedAt: new Date().toISOString(),
         ...(reviewNote?.trim() ? { reviewNote: reviewNote.trim() } : { reviewNote: null }),
       });
+    },
+
+    createMeeting: async (projectId, advisorTrack, inheritFromLatest) => {
+      if (!backendUrl) throw new Error("Missing backend URL");
+      const endpoint = `${backendUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectId)}/meetings`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ advisorTrack, inheritFromLatest }),
+      });
+      if (!res.ok) throw new Error(`Create meeting failed (${res.status})`);
+      const json = (await res.json()) as { id?: string };
+      if (!json.id) throw new Error("Create meeting failed (missing id)");
+      return json.id;
+    },
+
+    updateMeetingAgenda: async (meetingId, agendaItems) => {
+      if (!backendUrl) throw new Error("Missing backend URL");
+      const endpoint = `${backendUrl.replace(/\/$/, "")}/meetings/${encodeURIComponent(meetingId)}/agenda`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ agendaItems }),
+      });
+      if (!res.ok) throw new Error(`Update agenda failed (${res.status})`);
+    },
+
+    updateMeetingActionItems: async (meetingId, actionItems) => {
+      if (!backendUrl) throw new Error("Missing backend URL");
+      const endpoint = `${backendUrl.replace(/\/$/, "")}/meetings/${encodeURIComponent(meetingId)}/actionItems`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ actionItems }),
+      });
+      if (!res.ok) throw new Error(`Update action items failed (${res.status})`);
+    },
+
+    setMeetingStatus: async (meetingId, status) => {
+      if (!backendUrl) throw new Error("Missing backend URL");
+      const endpoint = `${backendUrl.replace(/\/$/, "")}/meetings/${encodeURIComponent(meetingId)}/status`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(`Update meeting status failed (${res.status})`);
     },
   };
 });

@@ -767,6 +767,167 @@ app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireInstructor
   return res.json({ ok: true });
 });
 
+function normalizeTrack(track: unknown): string {
+  const t = (track ?? "").toString().trim().toLowerCase();
+  const allowed = new Set(["general", "technical", "project", "design"]);
+  return allowed.has(t) ? t : "general";
+}
+
+function sanitizeItems(body: unknown, userId: string) {
+  const now = new Date().toISOString();
+  const arr = Array.isArray(body) ? body : [];
+  const out: any[] = [];
+  for (const raw of arr) {
+    const id = typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : uid("mi");
+    const text = (raw?.text ?? "").toString().trim();
+    if (!text) continue;
+    out.push({
+      id,
+      text,
+      createdAt: typeof raw?.createdAt === "string" && raw.createdAt ? raw.createdAt : now,
+      createdBy: typeof raw?.createdBy === "string" && raw.createdBy ? raw.createdBy : userId,
+      updatedAt: now,
+      updatedBy: userId,
+    });
+  }
+  return out;
+}
+
+async function canAccessProject(db: FirebaseFirestore.Firestore, projectId: string, userId: string, role: string) {
+  if (role === "admin") return { ok: true as const, project: null as any };
+  const projSnap = await db.collection("projects").doc(projectId).get();
+  if (!projSnap.exists) return { ok: false as const, status: 404, error: "Project not found" };
+  const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
+  const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+  const courseSnap = courseId ? await db.collection("courses").doc(courseId).get() : null;
+  const instructorIds =
+    (courseSnap?.exists ? ((courseSnap.get("instructorIds") as string[] | undefined) ?? []) : []) ?? [];
+  const allowed = studentIds.includes(userId) || instructorIds.includes(userId);
+  return allowed
+    ? { ok: true as const, project: { courseId, studentIds, instructorIds } }
+    : { ok: false as const, status: 403, error: "Not allowed for this project" };
+}
+
+app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+
+  const projectId = (req.params.projectId ?? "").toString().trim();
+  if (!projectId) return res.status(400).json({ error: "projectId is required" });
+
+  const body = (req.body ?? {}) as { advisorTrack?: unknown; inheritFromLatest?: unknown };
+  const advisorTrack = normalizeTrack(body.advisorTrack);
+  const inheritFromLatest = Boolean(body.inheritFromLatest);
+
+  const db = getFirestore();
+  const access = await canAccessProject(db, projectId, u.id, u.role);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  // Next sequence number per (projectId, advisorTrack)
+  const latestSnap = await db
+    .collection("meetings")
+    .where("projectId", "==", projectId)
+    .where("advisorTrack", "==", advisorTrack)
+    .orderBy("sequence", "desc")
+    .limit(1)
+    .get();
+  const latest = latestSnap.docs[0];
+  const nextSeq = ((latest?.get("sequence") as number | undefined) ?? 0) + 1;
+
+  let inheritedFromMeetingId: string | null = null;
+  let agendaItems: any[] = [];
+  if (inheritFromLatest && latest?.exists) {
+    const prevActionItems = ((latest.get("actionItems") as any[]) ?? []) as any[];
+    if (prevActionItems.length) {
+      inheritedFromMeetingId = (latest.get("id") as string | undefined) ?? null;
+      // Copy as agenda; new ids to avoid collisions
+      agendaItems = prevActionItems
+        .map((x) => ({ text: (x?.text ?? "").toString().trim() }))
+        .filter((x) => x.text)
+        .map((x) => ({ id: uid("ai"), text: x.text, createdAt: new Date().toISOString(), createdBy: u.id }));
+    }
+  }
+
+  const id = uid("m");
+  const now = new Date().toISOString();
+  await db.collection("meetings").doc(id).set({
+    id,
+    projectId,
+    advisorTrack,
+    sequence: nextSeq,
+    status: "draft",
+    inheritedFromMeetingId,
+    agendaItems,
+    actionItems: [],
+    createdAt: now,
+    createdBy: u.id,
+    updatedAt: now,
+    updatedBy: u.id,
+  });
+  return res.json({ ok: true, id });
+});
+
+app.patch("/meetings/:id/agenda", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+  const id = (req.params.id ?? "").toString().trim();
+  if (!id) return res.status(400).json({ error: "Missing meeting id" });
+
+  const db = getFirestore();
+  const ref = db.collection("meetings").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Meeting not found" });
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const access = await canAccessProject(db, projectId, u.id, u.role);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const agendaItems = sanitizeItems((req.body ?? {}).agendaItems, u.id);
+  const now = new Date().toISOString();
+  await ref.update({ agendaItems, updatedAt: now, updatedBy: u.id });
+  return res.json({ ok: true });
+});
+
+app.patch("/meetings/:id/actionItems", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+  const id = (req.params.id ?? "").toString().trim();
+  if (!id) return res.status(400).json({ error: "Missing meeting id" });
+
+  const db = getFirestore();
+  const ref = db.collection("meetings").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Meeting not found" });
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const access = await canAccessProject(db, projectId, u.id, u.role);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const actionItems = sanitizeItems((req.body ?? {}).actionItems, u.id);
+  const now = new Date().toISOString();
+  await ref.update({ actionItems, updatedAt: now, updatedBy: u.id });
+  return res.json({ ok: true });
+});
+
+app.patch("/meetings/:id/status", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+  const id = (req.params.id ?? "").toString().trim();
+  if (!id) return res.status(400).json({ error: "Missing meeting id" });
+  const status = (req.body?.status ?? "").toString().trim();
+  if (status !== "draft" && status !== "held") return res.status(400).json({ error: "Invalid status" });
+
+  const db = getFirestore();
+  const ref = db.collection("meetings").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Meeting not found" });
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const access = await canAccessProject(db, projectId, u.id, u.role);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const now = new Date().toISOString();
+  await ref.update({ status, updatedAt: now, updatedBy: u.id });
+  return res.json({ ok: true });
+});
+
 // Serve built frontend from the same Cloud Run service (optional but recommended).
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

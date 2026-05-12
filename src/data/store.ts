@@ -833,7 +833,10 @@ export const useApp = create<AppState>()((set, get) => {
         },
         body: JSON.stringify({ advisorTrack, inheritFromLatest }),
       });
-      if (!res.ok) throw new Error(`Create meeting failed (${res.status})`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Create meeting failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+      }
       const json = (await res.json()) as { id?: string };
       if (!json.id) throw new Error("Create meeting failed (missing id)");
       return json.id;
@@ -850,7 +853,10 @@ export const useApp = create<AppState>()((set, get) => {
         },
         body: JSON.stringify({ agendaItems }),
       });
-      if (!res.ok) throw new Error(`Update agenda failed (${res.status})`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Update agenda failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+      }
     },
 
     updateMeetingActionItems: async (meetingId, actionItems) => {
@@ -864,7 +870,10 @@ export const useApp = create<AppState>()((set, get) => {
         },
         body: JSON.stringify({ actionItems }),
       });
-      if (!res.ok) throw new Error(`Update action items failed (${res.status})`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Update action items failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+      }
     },
 
     setMeetingStatus: async (meetingId, status) => {
@@ -878,7 +887,10 @@ export const useApp = create<AppState>()((set, get) => {
         },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error(`Update meeting status failed (${res.status})`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Update meeting status failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+      }
     },
   };
 });

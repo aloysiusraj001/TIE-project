@@ -48,6 +48,7 @@ const Login = () => {
   const [confirmEmail, setConfirmEmail] = useState("");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const pendingEmailLinkHrefRef = useRef<string | null>(null);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   const backendUrlRaw = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
   const backendUrl = backendUrlRaw === "." || backendUrlRaw === "/" ? window.location.origin : backendUrlRaw;
@@ -219,15 +220,45 @@ const Login = () => {
 
           <div className="mb-10">
             <h2 className="mb-2 text-4xl font-semibold leading-tight text-foreground lg:text-5xl">
-              Sign in to continue
+              {authMode === "signin" ? "Sign in to continue" : "Create your account"}
             </h2>
+            <p className="text-sm text-muted-foreground">
+              {authMode === "signin"
+                ? "Use your course credentials, or switch to Create account if you are new."
+                : "Choose a login email and password, then add your details. HKUST email is optional."}
+            </p>
           </div>
 
           <Card className="academic-card p-6">
             <div className="space-y-4">
+              <div className="flex rounded-lg border border-border bg-muted/40 p-1">
+                <Button
+                  type="button"
+                  variant={authMode === "signin" ? "secondary" : "ghost"}
+                  className="flex-1"
+                  onClick={() => {
+                    setAuthMode("signin");
+                    setError(null);
+                  }}
+                >
+                  Sign in
+                </Button>
+                <Button
+                  type="button"
+                  variant={authMode === "signup" ? "secondary" : "ghost"}
+                  className="flex-1"
+                  onClick={() => {
+                    setAuthMode("signup");
+                    setError(null);
+                  }}
+                >
+                  Create account
+                </Button>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                  Email
+                  {authMode === "signup" ? "Login email" : "Email"}
                 </Label>
                 <Input
                   id="email"
@@ -250,94 +281,102 @@ const Login = () => {
                 <Input
                   id="password"
                   type="password"
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
+                  autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                  placeholder={authMode === "signup" ? "Choose a password (min. 6 characters)" : "Enter your password"}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
                     if (error) setError(null);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") void handleSignIn();
+                    if (e.key === "Enter") {
+                      if (authMode === "signin") void handleSignIn();
+                      else void handleSignUp();
+                    }
                   }}
                 />
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                    onClick={() => {
-                      setForgotEmail(email.trim());
-                      setForgotError(null);
-                      setForgotOpen(true);
-                    }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                {authMode === "signin" ? (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                      onClick={() => {
+                        setForgotEmail(email.trim());
+                        setForgotError(null);
+                        setForgotOpen(true);
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                ) : null}
               </div>
+
+              {authMode === "signup" ? (
+                <div className="rounded-md border border-border bg-gradient-subtle p-4">
+                  <div className="mb-2 text-sm font-semibold text-foreground">Your profile</div>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    School email can be HKUST or another address you use for class; it does not need to match your
+                    login email.
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
+                        Full name (Surname, First name)
+                      </Label>
+                      <Input
+                        id="fullName"
+                        placeholder="CHAN, Tai Man"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="hkustEmail" className="text-sm font-medium text-foreground">
+                        School email (optional)
+                      </Label>
+                      <Input
+                        id="hkustEmail"
+                        type="email"
+                        placeholder="name@connect.ust.hk"
+                        value={hkustEmail}
+                        onChange={(e) => setHkustEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="programme" className="text-sm font-medium text-foreground">
+                        Programme
+                      </Label>
+                      <Input
+                        id="programme"
+                        placeholder="e.g. BEng, BBA, MSc FinTech, etc."
+                        value={programme}
+                        onChange={(e) => setProgramme(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
 
-              <Button
-                className="w-full"
-                onClick={() => void handleSignIn()}
-                disabled={busy || !email.trim() || !password}
-              >
-                {busy ? "Signing in..." : "Sign in"}
-              </Button>
-
-              <div className="rounded-md border border-border bg-gradient-subtle p-4">
-                <div className="mb-2 text-sm font-semibold text-foreground">First time here?</div>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Create an account with email and password, then fill in your profile details.
-                </p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
-                      Full name (Surname, First name)
-                    </Label>
-                    <Input
-                      id="fullName"
-                      placeholder="CHAN, Tai Man"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hkustEmail" className="text-sm font-medium text-foreground">
-                      HKUST email (optional)
-                    </Label>
-                    <Input
-                      id="hkustEmail"
-                      type="email"
-                      placeholder="name@connect.ust.hk"
-                      value={hkustEmail}
-                      onChange={(e) => setHkustEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="programme" className="text-sm font-medium text-foreground">
-                      Programme
-                    </Label>
-                    <Input
-                      id="programme"
-                      placeholder="e.g. BEng, BBA, MSc FinTech, etc."
-                      value={programme}
-                      onChange={(e) => setProgramme(e.target.value)}
-                    />
-                  </div>
-                </div>
-
+              {authMode === "signin" ? (
                 <Button
-                  className="mt-4 w-full"
-                  variant="outline"
+                  className="w-full"
+                  onClick={() => void handleSignIn()}
+                  disabled={busy || !email.trim() || !password}
+                >
+                  {busy ? "Signing in..." : "Sign in"}
+                </Button>
+              ) : (
+                <Button
+                  className="w-full"
                   onClick={() => void handleSignUp()}
                   disabled={busy || !email.trim() || !password}
                 >
                   {busy ? "Signing up..." : "Sign up"}
                 </Button>
-              </div>
-
+              )}
             </div>
           </Card>
         </div>

@@ -809,62 +809,76 @@ async function canAccessProject(db: FirebaseFirestore.Firestore, projectId: stri
 }
 
 app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) => {
-  const u = await getCurrentUser(req);
-  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+  try {
+    const u = await getCurrentUser(req);
+    if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
 
-  const projectId = (req.params.projectId ?? "").toString().trim();
-  if (!projectId) return res.status(400).json({ error: "projectId is required" });
+    const projectId = (req.params.projectId ?? "").toString().trim();
+    if (!projectId) return res.status(400).json({ error: "projectId is required" });
 
-  const body = (req.body ?? {}) as { advisorTrack?: unknown; inheritFromLatest?: unknown };
-  const advisorTrack = normalizeTrack(body.advisorTrack);
-  const inheritFromLatest = Boolean(body.inheritFromLatest);
+    const body = (req.body ?? {}) as { advisorTrack?: unknown; inheritFromLatest?: unknown };
+    const advisorTrack = normalizeTrack(body.advisorTrack);
+    const inheritFromLatest = Boolean(body.inheritFromLatest);
 
-  const db = getFirestore();
-  const access = await canAccessProject(db, projectId, u.id, u.role);
-  if (!access.ok) return res.status(access.status).json({ error: access.error });
+    const db = getFirestore();
+    const access = await canAccessProject(db, projectId, u.id, u.role);
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-  // Next sequence number per (projectId, advisorTrack)
-  const latestSnap = await db
-    .collection("meetings")
-    .where("projectId", "==", projectId)
-    .where("advisorTrack", "==", advisorTrack)
-    .orderBy("sequence", "desc")
-    .limit(1)
-    .get();
-  const latest = latestSnap.docs[0];
-  const nextSeq = ((latest?.get("sequence") as number | undefined) ?? 0) + 1;
+    // Next sequence number per (projectId, advisorTrack)
+    const latestSnap = await db
+      .collection("meetings")
+      .where("projectId", "==", projectId)
+      .where("advisorTrack", "==", advisorTrack)
+      .orderBy("sequence", "desc")
+      .limit(1)
+      .get();
+    const latest = latestSnap.docs[0];
+    const nextSeq = ((latest?.get("sequence") as number | undefined) ?? 0) + 1;
 
-  let inheritedFromMeetingId: string | null = null;
-  let agendaItems: any[] = [];
-  if (inheritFromLatest && latest?.exists) {
-    const prevActionItems = ((latest.get("actionItems") as any[]) ?? []) as any[];
-    if (prevActionItems.length) {
-      inheritedFromMeetingId = (latest.get("id") as string | undefined) ?? null;
-      // Copy as agenda; new ids to avoid collisions
-      agendaItems = prevActionItems
-        .map((x) => ({ text: (x?.text ?? "").toString().trim() }))
-        .filter((x) => x.text)
-        .map((x) => ({ id: uid("ai"), text: x.text, createdAt: new Date().toISOString(), createdBy: u.id }));
+    let inheritedFromMeetingId: string | null = null;
+    let agendaItems: any[] = [];
+    if (inheritFromLatest && latest?.exists) {
+      const prevActionItems = ((latest.get("actionItems") as any[]) ?? []) as any[];
+      if (prevActionItems.length) {
+        inheritedFromMeetingId = (latest.get("id") as string | undefined) ?? null;
+        // Copy as agenda; new ids to avoid collisions
+        agendaItems = prevActionItems
+          .map((x) => ({ text: (x?.text ?? "").toString().trim() }))
+          .filter((x) => x.text)
+          .map((x) => ({ id: uid("ai"), text: x.text, createdAt: new Date().toISOString(), createdBy: u.id }));
+      }
     }
-  }
 
-  const id = uid("m");
-  const now = new Date().toISOString();
-  await db.collection("meetings").doc(id).set({
-    id,
-    projectId,
-    advisorTrack,
-    sequence: nextSeq,
-    status: "draft",
-    inheritedFromMeetingId,
-    agendaItems,
-    actionItems: [],
-    createdAt: now,
-    createdBy: u.id,
-    updatedAt: now,
-    updatedBy: u.id,
-  });
-  return res.json({ ok: true, id });
+    const id = uid("m");
+    const now = new Date().toISOString();
+    await db.collection("meetings").doc(id).set({
+      id,
+      projectId,
+      advisorTrack,
+      sequence: nextSeq,
+      status: "draft",
+      inheritedFromMeetingId,
+      agendaItems,
+      actionItems: [],
+      createdAt: now,
+      createdBy: u.id,
+      updatedAt: now,
+      updatedBy: u.id,
+    });
+    return res.json({ ok: true, id });
+  } catch (e: any) {
+    const msg = typeof e?.message === "string" ? e.message : "Unknown error";
+    // Firestore composite index required shows up as FAILED_PRECONDITION with a console link.
+    if (msg.includes("FAILED_PRECONDITION") && msg.includes("requires an index")) {
+      return res.status(400).json({
+        error: "Firestore index required for meetings query. Create the composite index, then retry.",
+        detail: msg,
+      });
+    }
+    // eslint-disable-next-line no-console
+    console.error("Create meeting failed:", e);
+    return res.status(500).json({ error: "Create meeting failed", detail: msg });
+  }
 });
 
 app.patch("/meetings/:id/agenda", requireFirebaseAuth, async (req, res) => {

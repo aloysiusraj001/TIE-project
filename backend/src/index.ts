@@ -767,10 +767,8 @@ app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireInstructor
   return res.json({ ok: true });
 });
 
-function normalizeTrack(track: unknown): string {
-  const t = (track ?? "").toString().trim().toLowerCase();
-  const allowed = new Set(["general", "technical", "project", "design"]);
-  return allowed.has(t) ? t : "general";
+function normalizeAdvisorId(advisorId: unknown): string {
+  return (advisorId ?? "").toString().trim();
 }
 
 function sanitizeItems(body: unknown, userId: string) {
@@ -816,19 +814,25 @@ app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) 
     const projectId = (req.params.projectId ?? "").toString().trim();
     if (!projectId) return res.status(400).json({ error: "projectId is required" });
 
-    const body = (req.body ?? {}) as { advisorTrack?: unknown; inheritFromLatest?: unknown };
-    const advisorTrack = normalizeTrack(body.advisorTrack);
+    const body = (req.body ?? {}) as { advisorId?: unknown; inheritFromLatest?: unknown };
+    const advisorId = normalizeAdvisorId(body.advisorId);
     const inheritFromLatest = Boolean(body.inheritFromLatest);
 
     const db = getFirestore();
     const access = await canAccessProject(db, projectId, u.id, u.role);
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // Next sequence number per (projectId, advisorTrack)
+    const instructorIds = (access.project?.instructorIds ?? []) as string[];
+    if (!advisorId) return res.status(400).json({ error: "advisorId is required" });
+    if (!instructorIds.includes(advisorId) && u.role !== "admin") {
+      return res.status(400).json({ error: "advisorId must be an instructor on the course" });
+    }
+
+    // Next sequence number per (projectId, advisorId)
     const latestSnap = await db
       .collection("meetings")
       .where("projectId", "==", projectId)
-      .where("advisorTrack", "==", advisorTrack)
+      .where("advisorId", "==", advisorId)
       .orderBy("sequence", "desc")
       .limit(1)
       .get();
@@ -854,7 +858,7 @@ app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) 
     await db.collection("meetings").doc(id).set({
       id,
       projectId,
-      advisorTrack,
+      advisorId,
       sequence: nextSeq,
       status: "draft",
       inheritedFromMeetingId,
@@ -940,6 +944,32 @@ app.patch("/meetings/:id/status", requireFirebaseAuth, async (req, res) => {
   const now = new Date().toISOString();
   await ref.update({ status, updatedAt: now, updatedBy: u.id });
   return res.json({ ok: true });
+});
+
+app.post("/meetings/:id/comments", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+  const id = (req.params.id ?? "").toString().trim();
+  if (!id) return res.status(400).json({ error: "Missing meeting id" });
+
+  const text = (req.body?.text ?? "").toString().trim();
+  if (!text) return res.status(400).json({ error: "text is required" });
+
+  const db = getFirestore();
+  const ref = db.collection("meetings").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Meeting not found" });
+
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const access = await canAccessProject(db, projectId, u.id, u.role);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const now = new Date().toISOString();
+  const commentId = uid("mc");
+  const comments = ((snap.get("comments") as any[]) ?? []) as any[];
+  const nextComments = [...comments, { id: commentId, authorId: u.id, text, createdAt: now }];
+  await ref.update({ comments: nextComments, updatedAt: now, updatedBy: u.id });
+  return res.json({ ok: true, id: commentId });
 });
 
 // Serve built frontend from the same Cloud Run service (optional but recommended).

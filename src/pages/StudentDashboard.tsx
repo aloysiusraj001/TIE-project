@@ -16,14 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import type { AdvisorTrack, Meeting, MeetingItem } from "@/data/types";
-
-const trackLabels: Record<AdvisorTrack, string> = {
-  general: "General",
-  technical: "Technical",
-  project: "Project",
-  design: "Design",
-};
+import type { AdvisorThreadId, Meeting, MeetingItem } from "@/data/types";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -59,13 +52,15 @@ const StudentDashboard = () => {
   const updateMeetingAgenda = useApp((s) => s.updateMeetingAgenda);
   const updateMeetingActionItems = useApp((s) => s.updateMeetingActionItems);
   const setMeetingStatus = useApp((s) => s.setMeetingStatus);
+  const addMeetingComment = useApp((s) => s.addMeetingComment);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
-  const [track, setTrack] = useState<AdvisorTrack>("general");
+  const [advisorId, setAdvisorId] = useState<AdvisorThreadId>("");
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [agendaDraft, setAgendaDraft] = useState<MeetingItem[]>([]);
   const [actionsDraft, setActionsDraft] = useState<MeetingItem[]>([]);
+  const [commentDraft, setCommentDraft] = useState("");
   const [prItem, setPrItem] = useState("");
   const [prQty, setPrQty] = useState(1);
   const [prCost, setPrCost] = useState(0);
@@ -77,12 +72,20 @@ const StudentDashboard = () => {
   const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
 
   const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
+  const selectedCourse = selectedProject ? courses.find((c) => c.id === selectedProject.courseId) : null;
+  const advisors = useMemo(() => {
+    const ids = selectedCourse?.instructorIds ?? [];
+    return ids
+      .map((id) => users.find((u) => u.id === id))
+      .filter((u): u is NonNullable<typeof u> => !!u);
+  }, [selectedCourse?.instructorIds, users]);
+
   const projectMeetings = useMemo(() => {
     if (!selectedProject) return [];
     return meetings
-      .filter((m) => m.projectId === selectedProject.id && m.advisorTrack === track)
+      .filter((m) => m.projectId === selectedProject.id && (m.advisorId || "") === advisorId)
       .sort((a, b) => (a.sequence < b.sequence ? 1 : -1));
-  }, [meetings, selectedProject?.id, track]);
+  }, [meetings, selectedProject?.id, advisorId]);
   const selectedMeeting: Meeting | undefined =
     projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
 
@@ -90,12 +93,19 @@ const StudentDashboard = () => {
     // When switching projects or tracks, default to newest meeting.
     setSelectedMeetingId(selectedMeeting?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProjectId, track]);
+  }, [selectedProjectId, advisorId]);
+
+  useEffect(() => {
+    if (!selectedCourse) return;
+    const first = selectedCourse.instructorIds?.[0] ?? "";
+    setAdvisorId((prev) => (prev ? prev : first));
+  }, [selectedCourse?.id]);
 
   useEffect(() => {
     if (!selectedProject) return;
     setAgendaDraft(selectedMeeting?.agendaItems?.length ? selectedMeeting.agendaItems : [newMeetingItem("", user.id)]);
     setActionsDraft(selectedMeeting?.actionItems?.length ? selectedMeeting.actionItems : [newMeetingItem("", user.id)]);
+    setCommentDraft("");
   }, [selectedProject?.id, selectedMeeting?.id, meetings, user.id]);
 
   if (selectedProjectId) {
@@ -194,15 +204,15 @@ const StudentDashboard = () => {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex rounded-lg border border-border bg-muted/40 p-1">
-                  {(Object.keys(trackLabels) as AdvisorTrack[]).map((t) => (
+                  {advisors.map((a) => (
                     <Button
-                      key={t}
+                      key={a.id}
                       type="button"
-                      variant={track === t ? "secondary" : "ghost"}
+                      variant={advisorId === a.id ? "secondary" : "ghost"}
                       size="sm"
-                      onClick={() => setTrack(t)}
+                      onClick={() => setAdvisorId(a.id)}
                     >
-                      {trackLabels[t]}
+                      {a.name}
                     </Button>
                   ))}
                 </div>
@@ -210,7 +220,8 @@ const StudentDashboard = () => {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      const id = await createMeeting(project.id, track, false);
+                      if (!advisorId) throw new Error("No instructor found for this course.");
+                      const id = await createMeeting(project.id, advisorId, false);
                       toast.success("Meeting created.");
                       setSelectedMeetingId(id);
                     } catch (e) {
@@ -224,7 +235,8 @@ const StudentDashboard = () => {
                 <Button
                   onClick={async () => {
                     try {
-                      const id = await createMeeting(project.id, track, true);
+                      if (!advisorId) throw new Error("No instructor found for this course.");
+                      const id = await createMeeting(project.id, advisorId, true);
                       toast.success("Meeting created (inherited).");
                       setSelectedMeetingId(id);
                     } catch (e) {
@@ -283,7 +295,7 @@ const StudentDashboard = () => {
               </div>
 
               {selectedMeeting ? (
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid gap-6 lg:grid-cols-3">
                   <div>
                     <div className="mb-2 font-serif text-lg font-semibold text-foreground">Agenda</div>
                     <div className="space-y-2">
@@ -382,6 +394,59 @@ const StudentDashboard = () => {
                         >
                           Save action items
                         </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">Comments</div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Textarea
+                          value={commentDraft}
+                          onChange={(e) => setCommentDraft(e.target.value)}
+                          rows={4}
+                          placeholder="Write a comment for your team/advisor…"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!commentDraft.trim()}
+                            onClick={() => {
+                              try {
+                                addMeetingComment(selectedMeeting.id, user.id, commentDraft);
+                                setCommentDraft("");
+                                toast.success("Comment posted.");
+                              } catch {
+                                toast.error("Could not post comment.");
+                              }
+                            }}
+                          >
+                            Post comment
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {(selectedMeeting.comments ?? [])
+                          .slice()
+                          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+                          .map((c) => {
+                            const author = users.find((u) => u.id === c.authorId);
+                            return (
+                              <div key={c.id} className="rounded-md border border-border bg-card p-3">
+                                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                  <span>{author?.name ?? "Unknown"}</span>
+                                  <span>{new Date(c.createdAt).toLocaleString()}</span>
+                                </div>
+                                <div className="text-sm text-foreground whitespace-pre-wrap">{c.text}</div>
+                              </div>
+                            );
+                          })}
+                        {(selectedMeeting.comments ?? []).length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No comments yet.</div>
+                        ) : null}
                       </div>
                     </div>
                   </div>

@@ -14,10 +14,11 @@ import {
 import { onAuthStateChanged, signOut as fbSignOut } from "firebase/auth";
 import {
   ApprovalStatus,
-  AdvisorTrack,
+  AdvisorThreadId,
   Comment,
   Course,
   Meeting,
+  MeetingComment,
   MeetingItem,
   Project,
   PurchaseRequest,
@@ -78,10 +79,11 @@ interface AppState {
   reviewPurchaseRequest: (id: string, status: PurchaseRequestStatus, reviewNote?: string) => void;
 
   // meetings
-  createMeeting: (projectId: string, advisorTrack: AdvisorTrack, inheritFromLatest: boolean) => Promise<string>;
+  createMeeting: (projectId: string, advisorId: AdvisorThreadId, inheritFromLatest: boolean) => Promise<string>;
   updateMeetingAgenda: (meetingId: string, agendaItems: MeetingItem[]) => Promise<void>;
   updateMeetingActionItems: (meetingId: string, actionItems: MeetingItem[]) => Promise<void>;
   setMeetingStatus: (meetingId: string, status: "draft" | "held") => Promise<void>;
+  addMeetingComment: (meetingId: string, authorId: string, text: string) => void;
 }
 
 const palette = [
@@ -822,7 +824,7 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
 
-    createMeeting: async (projectId, advisorTrack, inheritFromLatest) => {
+    createMeeting: async (projectId, advisorId, inheritFromLatest) => {
       if (!backendUrl) throw new Error("Missing backend URL");
       const endpoint = `${backendUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectId)}/meetings`;
       const res = await fetch(endpoint, {
@@ -831,7 +833,7 @@ export const useApp = create<AppState>()((set, get) => {
           "content-type": "application/json",
           ...(await authHeader()),
         },
-        body: JSON.stringify({ advisorTrack, inheritFromLatest }),
+        body: JSON.stringify({ advisorId, inheritFromLatest }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
@@ -891,6 +893,35 @@ export const useApp = create<AppState>()((set, get) => {
         const detail = await res.text().catch(() => "");
         throw new Error(`Update meeting status failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
       }
+    },
+
+    addMeetingComment: (meetingId, authorId, text) => {
+      const meeting = get().meetings.find((m) => m.id === meetingId);
+      if (!meeting) return;
+      if (!text.trim()) return;
+
+      if (backendUrl) {
+        void (async () => {
+          const endpoint = `${backendUrl.replace(/\/$/, "")}/meetings/${encodeURIComponent(meetingId)}/comments`;
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(await authHeader()),
+            },
+            body: JSON.stringify({ text }),
+          });
+          if (!res.ok) throw new Error(`Add meeting comment failed (${res.status})`);
+        })().catch(() => {});
+        return;
+      }
+
+      const commentId = uid("mc");
+      const comments: MeetingComment[] = [
+        ...(meeting.comments ?? []),
+        { id: commentId, authorId, text: text.trim(), createdAt: new Date().toISOString() },
+      ];
+      void updateDoc(doc(firestore, "meetings", meetingId), { comments });
     },
   };
 });

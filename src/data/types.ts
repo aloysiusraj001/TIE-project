@@ -34,7 +34,8 @@ export type ApprovalStatus = "pending" | "approved" | "needs_revision";
 
 export type PurchaseRequestStatus = "pending" | "approved" | "rejected";
 
-export type AdvisorTrack = "general" | "technical" | "project" | "design";
+/** Meeting thread key (instructor/advisor user id). */
+export type AdvisorThreadId = string;
 
 export interface MeetingItem {
   id: string;
@@ -45,17 +46,28 @@ export interface MeetingItem {
   updatedBy?: string;
 }
 
+export interface MeetingComment {
+  id: string;
+  authorId: string;
+  text: string;
+  createdAt: string;
+}
+
 export type MeetingStatus = "draft" | "held";
 
 export interface Meeting {
   id: string;
   projectId: string;
-  advisorTrack: AdvisorTrack;
+  /** Meeting thread owner (instructor/advisor id). */
+  advisorId: AdvisorThreadId;
+  /** Backward compatibility for older docs created before advisorId existed. */
+  advisorTrack?: string;
   sequence: number;
   status: MeetingStatus;
   inheritedFromMeetingId?: string | null;
   agendaItems: MeetingItem[];
   actionItems: MeetingItem[];
+  comments?: MeetingComment[];
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

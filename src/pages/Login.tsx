@@ -126,8 +126,9 @@ const Login = () => {
 
   const handleSignUp = async () => {
     setError(null);
-    if (!email.trim() || !email.includes("@")) {
-      setError("Please enter a valid email address.");
+    const schoolLogin = hkustEmail.trim();
+    if (!schoolLogin || !schoolLogin.includes("@")) {
+      setError("Please enter a valid school email — we use it as your account login.");
       return;
     }
     if (!password) {
@@ -137,7 +138,7 @@ const Login = () => {
 
     try {
       setBusy(true);
-      await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
+      await createUserWithEmailAndPassword(firebaseAuth, schoolLogin, password);
       await ensureUserRow();
       toast.success("Account created.");
       navigate("/");
@@ -225,7 +226,7 @@ const Login = () => {
             <p className="text-sm text-muted-foreground">
               {authMode === "signin"
                 ? "Use your course credentials, or switch to Create account if you are new."
-                : "Choose a login email and password, then add your details. HKUST email is optional."}
+                : "Add your name and school email, then a password. You will sign in with the same school email and password."}
             </p>
           </div>
 
@@ -256,23 +257,70 @@ const Login = () => {
                 </Button>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                  {authMode === "signup" ? "Login email" : "Email"}
-                </Label>
-                <Input
-                  id="email"
-                  ref={emailRef}
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@uni.edu"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (error) setError(null);
-                  }}
-                />
-              </div>
+              {authMode === "signin" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium text-foreground">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    ref={emailRef}
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@uni.edu"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (error) setError(null);
+                    }}
+                  />
+                </div>
+              ) : null}
+
+              {authMode === "signup" ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
+                      Full name (Surname, First name)
+                    </Label>
+                    <Input
+                      id="fullName"
+                      placeholder="CHAN, Tai Man"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="hkustEmail" className="text-sm font-medium text-foreground">
+                        School email (optional)
+                      </Label>
+                      <Input
+                        id="hkustEmail"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="name@connect.ust.hk"
+                        value={hkustEmail}
+                        onChange={(e) => {
+                          setHkustEmail(e.target.value);
+                          if (error) setError(null);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="programme" className="text-sm font-medium text-foreground">
+                        Programme
+                      </Label>
+                      <Input
+                        id="programme"
+                        placeholder="e.g. BEng, BBA, MSc FinTech, etc."
+                        value={programme}
+                        onChange={(e) => setProgramme(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
@@ -312,52 +360,6 @@ const Login = () => {
                 ) : null}
               </div>
 
-              {authMode === "signup" ? (
-                <div className="rounded-md border border-border bg-gradient-subtle p-4">
-                  <div className="mb-2 text-sm font-semibold text-foreground">Your profile</div>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    School email can be HKUST or another address you use for class; it does not need to match your
-                    login email.
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
-                        Full name (Surname, First name)
-                      </Label>
-                      <Input
-                        id="fullName"
-                        placeholder="CHAN, Tai Man"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="hkustEmail" className="text-sm font-medium text-foreground">
-                        School email (optional)
-                      </Label>
-                      <Input
-                        id="hkustEmail"
-                        type="email"
-                        placeholder="name@connect.ust.hk"
-                        value={hkustEmail}
-                        onChange={(e) => setHkustEmail(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="programme" className="text-sm font-medium text-foreground">
-                        Programme
-                      </Label>
-                      <Input
-                        id="programme"
-                        placeholder="e.g. BEng, BBA, MSc FinTech, etc."
-                        value={programme}
-                        onChange={(e) => setProgramme(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
               {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
 
               {authMode === "signin" ? (
@@ -372,7 +374,7 @@ const Login = () => {
                 <Button
                   className="w-full"
                   onClick={() => void handleSignUp()}
-                  disabled={busy || !email.trim() || !password}
+                  disabled={busy || !hkustEmail.trim() || !hkustEmail.includes("@") || !password}
                 >
                   {busy ? "Signing up..." : "Sign up"}
                 </Button>

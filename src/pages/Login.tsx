@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import {
   createUserWithEmailAndPassword,
@@ -25,10 +25,20 @@ import { toast } from "sonner";
 /** localStorage key for Firebase email-link (magic link) sign-in */
 const EMAIL_LINK_STORAGE_KEY = "tie_emailForSignIn";
 
-/** Avoid duplicate automatic completion of the same email link (StrictMode / re-renders) */
-let emailLinkAutoSignInStarted = false;
-/** Open the cross-device email confirmation dialog only once per load */
-let emailLinkConfirmDialogShown = false;
+function authErrorCode(e: unknown): string | undefined {
+  if (typeof e === "object" && e && "code" in e) return String((e as { code: string }).code);
+  return undefined;
+}
+
+function emailFromSignInLinkUrl(href: string): string {
+  try {
+    const raw = new URL(href).searchParams.get("email");
+    if (!raw) return "";
+    return decodeURIComponent(raw).trim();
+  } catch {
+    return "";
+  }
+}
 
 const Login = () => {
   const navigate = useNavigate();
@@ -44,10 +54,9 @@ const Login = () => {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
-  const [confirmEmailOpen, setConfirmEmailOpen] = useState(false);
-  const [confirmEmail, setConfirmEmail] = useState("");
-  const [confirmBusy, setConfirmBusy] = useState(false);
-  const pendingEmailLinkHrefRef = useRef<string | null>(null);
+  /** Present when the URL is a Firebase email sign-in link (user must tap Complete — auto sign-in breaks with scanners). */
+  const [magicLink, setMagicLink] = useState<{ href: string } | null>(null);
+  const [magicLinkEmail, setMagicLinkEmail] = useState("");
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   const backendUrlRaw = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
@@ -71,50 +80,65 @@ const Login = () => {
     });
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const href = window.location.href;
-    if (!isSignInWithEmailLink(firebaseAuth, href)) return;
-
-    const stored = window.localStorage.getItem(EMAIL_LINK_STORAGE_KEY);
-
-    const finishFromLink = async (addr: string) => {
-      setBusy(true);
-      const emailForLink = addr.trim().toLowerCase();
-      try {
-        await signInWithEmailLink(firebaseAuth, href, emailForLink);
-        window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
-        window.history.replaceState({}, document.title, `${window.location.origin}/login`);
-        try {
-          await ensureUserRow();
-        } catch {
-          toast.error("Signed in, but profile sync failed. Refresh the page or try again.");
-          navigate("/");
-          return;
-        }
-        toast.success("Signed in with email link.");
-        navigate("/");
-      } catch {
-        toast.error("This sign-in link is invalid or has expired. Request a new one.");
-        window.history.replaceState({}, document.title, `${window.location.origin}/login`);
-      } finally {
-        setBusy(false);
-        emailLinkAutoSignInStarted = false;
-      }
-    };
-
-    if (stored?.trim()) {
-      if (emailLinkAutoSignInStarted) return;
-      emailLinkAutoSignInStarted = true;
-      void finishFromLink(stored.trim());
+    if (!isSignInWithEmailLink(firebaseAuth, href)) {
+      setMagicLink(null);
       return;
     }
+    const stored = window.localStorage.getItem(EMAIL_LINK_STORAGE_KEY) || "";
+    const fromUrl = emailFromSignInLinkUrl(href);
+    const def = (stored || fromUrl).trim().toLowerCase();
+    setMagicLink({ href });
+    setMagicLinkEmail(def);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- detect email-link URL once when Login mounts
+  }, []);
 
-    if (emailLinkConfirmDialogShown) return;
-    emailLinkConfirmDialogShown = true;
-    pendingEmailLinkHrefRef.current = href;
-    setConfirmEmailOpen(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on load for email-link URL; ensureUserRow uses latest state when completing
-  }, [navigate]);
+  const handleCompleteMagicLink = async () => {
+    const href = magicLink?.href;
+    if (!href) return;
+    const addr = magicLinkEmail.trim().toLowerCase();
+    if (!addr.includes("@")) {
+      toast.error("Enter the email address you used when you requested the link.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await signInWithEmailLink(firebaseAuth, href, addr);
+      window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
+      window.history.replaceState({}, document.title, `${window.location.origin}/login`);
+      setMagicLink(null);
+      try {
+        await ensureUserRow();
+      } catch {
+        toast.error("Signed in, but profile sync failed. Refresh the page or try again.");
+        navigate("/");
+        return;
+      }
+      toast.success("Signed in with email link.");
+      navigate("/");
+    } catch (e) {
+      const code = authErrorCode(e);
+      console.warn("signInWithEmailLink failed", code, e);
+      if (code === "auth/invalid-action-code" || code === "auth/expired-action-code") {
+        toast.error(
+          "This link was already used or has expired (email scanners sometimes use it first). Send a new magic link, then use “Complete sign-in” here.",
+        );
+        setMagicLink(null);
+        window.history.replaceState({}, document.title, `${window.location.origin}/login`);
+      } else if (code === "auth/invalid-email") {
+        toast.error("That email address is not valid. Check for typos.");
+      } else if (code === "auth/unauthorized-continue-uri" || code === "auth/invalid-continue-uri") {
+        toast.error("This site’s URL is not allowed for email links. Add this domain under Firebase Authentication → Settings → Authorized domains.");
+      } else {
+        toast.error(
+          "Could not complete sign-in. If you used a different email than the one in the box, correct it and try again. Otherwise request a new link.",
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleSignIn = async () => {
     setError(null);
@@ -195,31 +219,6 @@ const Login = () => {
     }
   };
 
-  const handleConfirmEmailLink = async () => {
-    const href = pendingEmailLinkHrefRef.current;
-    const addr = confirmEmail.trim();
-    if (!href || !addr.includes("@")) {
-      toast.error("Enter the same email address you used to request the link.");
-      return;
-    }
-    try {
-      setConfirmBusy(true);
-      await signInWithEmailLink(firebaseAuth, href, addr.trim().toLowerCase());
-      window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
-      window.history.replaceState({}, document.title, `${window.location.origin}/login`);
-      await ensureUserRow();
-      toast.success("Signed in with email link.");
-      setConfirmEmailOpen(false);
-      pendingEmailLinkHrefRef.current = null;
-      emailLinkConfirmDialogShown = false;
-      navigate("/");
-    } catch {
-      toast.error("That email does not match this link, or the link has expired.");
-    } finally {
-      setConfirmBusy(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <div className="container mx-auto px-6 py-12 lg:py-20">
@@ -247,6 +246,42 @@ const Login = () => {
 
           <Card className="academic-card p-6">
             <div className="space-y-4">
+              {magicLink ? (
+                <div className="space-y-3 rounded-md border border-primary/25 bg-primary/5 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Finish signing in from your email</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Email security tools sometimes open links before you do, which uses up a one-time sign-in link.
+                      Confirm the email you requested the link for, then tap Complete sign-in.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="magic-link-email" className="text-sm font-medium text-foreground">
+                      Email
+                    </Label>
+                    <Input
+                      id="magic-link-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@uni.edu"
+                      value={magicLinkEmail}
+                      onChange={(e) => setMagicLinkEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void handleCompleteMagicLink();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={busy || !magicLinkEmail.trim() || !magicLinkEmail.includes("@")}
+                    onClick={() => void handleCompleteMagicLink()}
+                  >
+                    {busy ? "Signing in…" : "Complete sign-in"}
+                  </Button>
+                </div>
+              ) : null}
+
               <div className="flex rounded-lg border border-border bg-muted/40 p-1">
                 <Button
                   type="button"
@@ -404,8 +439,8 @@ const Login = () => {
           <DialogHeader>
             <DialogTitle>Sign in with email link</DialogTitle>
             <DialogDescription>
-              Enter your account email and we will send you a magic link. After you open it, you will be signed in
-              without your password (you can keep using your password later if you like).
+              Enter your account email and we will send you a magic link. After you open the link in your browser, use
+              the “Complete sign-in” button on this page (do not rely on the page loading alone).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -436,56 +471,6 @@ const Login = () => {
               disabled={forgotBusy || !forgotEmail.trim()}
             >
               {forgotBusy ? "Sending…" : "Send magic link"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={confirmEmailOpen}
-        onOpenChange={(open) => {
-          setConfirmEmailOpen(open);
-          if (!open) {
-            emailLinkConfirmDialogShown = false;
-            pendingEmailLinkHrefRef.current = null;
-            if (isSignInWithEmailLink(firebaseAuth, window.location.href)) {
-              window.history.replaceState({}, document.title, `${window.location.origin}/login`);
-            }
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirm your email</DialogTitle>
-            <DialogDescription>
-              Open the link on the same device and browser where you requested it for the fastest sign-in. If you
-              opened it elsewhere, enter the email address you used below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="confirm-email-link">Email</Label>
-            <Input
-              id="confirm-email-link"
-              type="email"
-              autoComplete="email"
-              placeholder="you@uni.edu"
-              value={confirmEmail}
-              onChange={(e) => setConfirmEmail(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleConfirmEmailLink();
-              }}
-            />
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setConfirmEmailOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleConfirmEmailLink()}
-              disabled={confirmBusy || !confirmEmail.trim()}
-            >
-              {confirmBusy ? "Signing in…" : "Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>

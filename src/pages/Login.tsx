@@ -143,8 +143,16 @@ const Login = () => {
       toast.success("Account created.");
       navigate("/");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Sign-up failed.";
-      setError(msg);
+      const code = typeof e === "object" && e && "code" in e ? String((e as { code: string }).code) : "";
+      if (code === "auth/email-already-in-use") {
+        setError("An account already exists for this school email. Switch to Sign in or use Forgot password.");
+      } else if (code === "auth/weak-password") {
+        setError("Password is too weak. Use at least 6 characters.");
+      } else if (code === "auth/invalid-email") {
+        setError("That email address does not look valid.");
+      } else {
+        setError(e instanceof Error ? e.message : "Sign-up failed.");
+      }
     } finally {
       setBusy(false);
     }

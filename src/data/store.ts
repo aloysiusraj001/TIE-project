@@ -499,6 +499,13 @@ export const useApp = create<AppState>()((set, get) => {
         return;
       }
 
+      // Local-only fallback: enforce course roster gate even without backend.
+      const course = get().courses.find((c) => c.id === project.courseId);
+      const rosterIds = (course?.studentIds ?? []) as string[];
+      if (course && !rosterIds.includes(studentId)) {
+        throw new Error("Add student to the course first.");
+      }
+
       await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: [...project.studentIds, studentId],
       });

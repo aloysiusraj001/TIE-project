@@ -304,6 +304,8 @@ const AdminDashboard = () => {
             <div className="grid gap-4 lg:grid-cols-2">
               {projects.map((p) => {
                 const course = courses.find((c) => c.id === p.courseId);
+                const rosterIds = ((course?.studentIds ?? []) as string[]) ?? [];
+                const addableStudents = students.filter((s) => rosterIds.includes(s.id)).filter((s) => !p.studentIds.includes(s.id));
                 return (
                   <Card key={p.id} className="academic-card p-5">
                     <Badge variant="secondary" className="mb-2">{course?.code}</Badge>
@@ -327,7 +329,7 @@ const AdminDashboard = () => {
                     <Select onValueChange={(v) => assignStudentToProject(p.id, v)}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Add student to team…" /></SelectTrigger>
                       <SelectContent>
-                        {students.filter((s) => !p.studentIds.includes(s.id)).map((s) => (
+                        {addableStudents.map((s) => (
                           <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}
                       </SelectContent>

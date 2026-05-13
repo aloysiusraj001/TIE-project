@@ -814,9 +814,15 @@ app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) 
     const projectId = (req.params.projectId ?? "").toString().trim();
     if (!projectId) return res.status(400).json({ error: "projectId is required" });
 
-    const body = (req.body ?? {}) as { advisorId?: unknown; inheritFromLatest?: unknown };
+    const body = (req.body ?? {}) as { advisorId?: unknown; inheritFromLatest?: unknown; proposedAt?: unknown };
     const advisorId = normalizeAdvisorId(body.advisorId);
     const inheritFromLatest = Boolean(body.inheritFromLatest);
+    let proposedAt: string | null = null;
+    if (body.proposedAt === null || body.proposedAt === "") proposedAt = null;
+    else if (typeof body.proposedAt === "string" && body.proposedAt.trim()) {
+      const d = new Date(body.proposedAt.trim());
+      proposedAt = Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
 
     const db = getFirestore();
     const access = await canAccessProject(db, projectId, u.id, u.role);
@@ -864,6 +870,7 @@ app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) 
       inheritedFromMeetingId,
       agendaItems,
       actionItems: [],
+      proposedAt,
       createdAt: now,
       createdBy: u.id,
       updatedAt: now,
@@ -922,6 +929,40 @@ app.patch("/meetings/:id/actionItems", requireFirebaseAuth, async (req, res) => 
   const actionItems = sanitizeItems((req.body ?? {}).actionItems, u.id);
   const now = new Date().toISOString();
   await ref.update({ actionItems, updatedAt: now, updatedBy: u.id });
+  return res.json({ ok: true });
+});
+
+app.patch("/meetings/:id/details", requireFirebaseAuth, async (req, res) => {
+  const u = await getCurrentUser(req);
+  if (!u?.id || !u.role) return res.status(403).json({ error: "Missing user profile" });
+  const id = (req.params.id ?? "").toString().trim();
+  if (!id) return res.status(400).json({ error: "Missing meeting id" });
+
+  const db = getFirestore();
+  const ref = db.collection("meetings").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return res.status(404).json({ error: "Meeting not found" });
+  const projectId = (snap.get("projectId") as string | undefined) ?? "";
+  const access = await canAccessProject(db, projectId, u.id, u.role);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const raw = (req.body ?? {}) as { proposedAt?: unknown };
+  let proposedAt: string | null | undefined;
+  if ("proposedAt" in raw) {
+    if (raw.proposedAt === null || raw.proposedAt === "") proposedAt = null;
+    else if (typeof raw.proposedAt === "string" && raw.proposedAt.trim()) {
+      const d = new Date(raw.proposedAt.trim());
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ error: "Invalid proposedAt" });
+      proposedAt = d.toISOString();
+    } else {
+      return res.status(400).json({ error: "Invalid proposedAt" });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { updatedAt: now, updatedBy: u.id };
+  if (proposedAt !== undefined) patch.proposedAt = proposedAt;
+  await ref.update(patch);
   return res.json({ ok: true });
 });
 

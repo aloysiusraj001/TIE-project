@@ -68,6 +68,8 @@ export interface Meeting {
   agendaItems: MeetingItem[];
   actionItems: MeetingItem[];
   comments?: MeetingComment[];
+  /** Proposed meeting start (ISO). Optional until the team sets it. */
+  proposedAt?: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

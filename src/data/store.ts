@@ -79,9 +79,15 @@ interface AppState {
   reviewPurchaseRequest: (id: string, status: PurchaseRequestStatus, reviewNote?: string) => void;
 
   // meetings
-  createMeeting: (projectId: string, advisorId: AdvisorThreadId, inheritFromLatest: boolean) => Promise<string>;
+  createMeeting: (
+    projectId: string,
+    advisorId: AdvisorThreadId,
+    inheritFromLatest: boolean,
+    options?: { proposedAt?: string | null },
+  ) => Promise<string>;
   updateMeetingAgenda: (meetingId: string, agendaItems: MeetingItem[]) => Promise<void>;
   updateMeetingActionItems: (meetingId: string, actionItems: MeetingItem[]) => Promise<void>;
+  updateMeetingProposedAt: (meetingId: string, proposedAt: string | null) => Promise<void>;
   setMeetingStatus: (meetingId: string, status: "draft" | "held") => Promise<void>;
   addMeetingComment: (meetingId: string, authorId: string, text: string) => void;
 }
@@ -824,16 +830,21 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
 
-    createMeeting: async (projectId, advisorId, inheritFromLatest) => {
+    createMeeting: async (projectId, advisorId, inheritFromLatest, options) => {
       if (!backendUrl) throw new Error("Missing backend URL");
       const endpoint = `${backendUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectId)}/meetings`;
+      const proposedAt = options?.proposedAt;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           ...(await authHeader()),
         },
-        body: JSON.stringify({ advisorId, inheritFromLatest }),
+        body: JSON.stringify({
+          advisorId,
+          inheritFromLatest,
+          ...(proposedAt !== undefined ? { proposedAt } : {}),
+        }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
@@ -875,6 +886,23 @@ export const useApp = create<AppState>()((set, get) => {
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
         throw new Error(`Update action items failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+      }
+    },
+
+    updateMeetingProposedAt: async (meetingId, proposedAt) => {
+      if (!backendUrl) throw new Error("Missing backend URL");
+      const endpoint = `${backendUrl.replace(/\/$/, "")}/meetings/${encodeURIComponent(meetingId)}/details`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ proposedAt }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Update meeting details failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
       }
     },
 

@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import type { AdvisorThreadId, Meeting, MeetingItem } from "@/data/types";
+import { datetimeLocalValueToIso, formatMeetingOptionLabel, formatMeetingProposed, isoToDatetimeLocalValue } from "@/lib/meetingTime";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -53,6 +54,7 @@ const InstructorDashboard = () => {
   const updateMeetingAgenda = useApp((s) => s.updateMeetingAgenda);
   const updateMeetingActionItems = useApp((s) => s.updateMeetingActionItems);
   const setMeetingStatus = useApp((s) => s.setMeetingStatus);
+  const updateMeetingProposedAt = useApp((s) => s.updateMeetingProposedAt);
   const addMeetingComment = useApp((s) => s.addMeetingComment);
   const addStudentToCourse = useApp((s) => s.addStudentToCourse);
   const removeStudentFromCourse = useApp((s) => s.removeStudentFromCourse);
@@ -68,6 +70,8 @@ const InstructorDashboard = () => {
   const [agendaDraft, setAgendaDraft] = useState<MeetingItem[]>([]);
   const [actionsDraft, setActionsDraft] = useState<MeetingItem[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
+  const [createProposedLocal, setCreateProposedLocal] = useState("");
+  const [proposedLocalDraft, setProposedLocalDraft] = useState("");
   const [prNotes, setPrNotes] = useState<Record<string, string>>({});
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
@@ -109,9 +113,13 @@ const InstructorDashboard = () => {
 
   useEffect(() => {
     if (!selectedCourse) return;
-    const first = selectedCourse.instructorIds?.[0] ?? "";
-    setAdvisorId((prev) => (prev ? prev : first));
-  }, [selectedCourse?.id]);
+    const ids = selectedCourse.instructorIds ?? [];
+    setAdvisorId((prev) => (prev && ids.includes(prev) ? prev : ids[0] ?? ""));
+  }, [selectedCourse?.id, selectedCourse?.instructorIds?.join("|")]);
+
+  useEffect(() => {
+    setProposedLocalDraft(isoToDatetimeLocalValue(selectedMeeting?.proposedAt ?? null));
+  }, [selectedMeeting?.id, selectedMeeting?.proposedAt]);
 
   useEffect(() => {
     if (!selectedProject) return;
@@ -254,26 +262,44 @@ const InstructorDashboard = () => {
                   View and edit agendas/action items. Create new meetings (optionally inheriting prior action items).
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-lg border border-border bg-muted/40 p-1">
-                  {advisors.map((a) => (
-                    <Button
-                      key={a.id}
-                      type="button"
-                      variant={advisorId === a.id ? "secondary" : "ghost"}
-                      size="sm"
-                      onClick={() => setAdvisorId(a.id)}
-                    >
-                      {a.name}
-                    </Button>
-                  ))}
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="space-y-1.5 sm:min-w-[220px]">
+                  <Label htmlFor="instructor-meeting-advisor" className="text-xs text-muted-foreground">
+                    Meeting thread (instructor)
+                  </Label>
+                  <Select value={advisorId || undefined} onValueChange={(v) => setAdvisorId(v)}>
+                    <SelectTrigger id="instructor-meeting-advisor" className="h-9 w-full border-border bg-background sm:w-[260px]">
+                      <SelectValue placeholder="Choose instructor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {advisors.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 sm:min-w-[200px]">
+                  <Label htmlFor="instructor-new-meeting-proposed" className="text-xs text-muted-foreground">
+                    Proposed time for new meetings (optional)
+                  </Label>
+                  <Input
+                    id="instructor-new-meeting-proposed"
+                    type="datetime-local"
+                    value={createProposedLocal}
+                    onChange={(e) => setCreateProposedLocal(e.target.value)}
+                    className="h-9 w-full sm:w-[240px]"
+                  />
                 </div>
                 <Button
                   variant="outline"
                   onClick={async () => {
                     try {
                       if (!advisorId) throw new Error("No instructor found for this course.");
-                      const id = await createMeeting(project.id, advisorId, false);
+                      const iso = datetimeLocalValueToIso(createProposedLocal);
+                      const id = await createMeeting(project.id, advisorId, false, iso ? { proposedAt: iso } : undefined);
+                      setCreateProposedLocal("");
                       toast.success("Meeting created.");
                       setSelectedMeetingId(id);
                     } catch (e) {
@@ -288,7 +314,9 @@ const InstructorDashboard = () => {
                   onClick={async () => {
                     try {
                       if (!advisorId) throw new Error("No instructor found for this course.");
-                      const id = await createMeeting(project.id, advisorId, true);
+                      const iso = datetimeLocalValueToIso(createProposedLocal);
+                      const id = await createMeeting(project.id, advisorId, true, iso ? { proposedAt: iso } : undefined);
+                      setCreateProposedLocal("");
                       toast.success("Meeting created (inherited).");
                       setSelectedMeetingId(id);
                     } catch (e) {
@@ -311,6 +339,15 @@ const InstructorDashboard = () => {
                   <div className="text-xs text-muted-foreground">
                     {selectedMeeting ? `Created ${new Date(selectedMeeting.createdAt).toLocaleString()}` : "Create a meeting above."}
                   </div>
+                  {selectedMeeting ? (
+                    <div className="mt-1 text-xs text-foreground">
+                      {selectedMeeting.proposedAt ? (
+                        <>Proposed: {formatMeetingProposed(selectedMeeting.proposedAt)}</>
+                      ) : (
+                        <span className="text-muted-foreground">No proposed date yet — set it below.</span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {projectMeetings.length > 0 ? (
@@ -321,7 +358,7 @@ const InstructorDashboard = () => {
                     >
                       {projectMeetings.map((m) => (
                         <option key={m.id} value={m.id}>
-                          #{m.sequence} · {new Date(m.createdAt).toLocaleDateString()} · {m.status}
+                          {formatMeetingOptionLabel(m)}
                         </option>
                       ))}
                     </select>
@@ -345,6 +382,57 @@ const InstructorDashboard = () => {
                   ) : null}
                 </div>
               </div>
+
+              {selectedMeeting ? (
+                <div className="mb-4 flex flex-col gap-2 rounded-md border border-border/70 bg-muted/25 p-3 sm:flex-row sm:flex-wrap sm:items-end">
+                  <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
+                    <Label htmlFor="instructor-meeting-proposed" className="text-xs">
+                      Proposed meeting date & time
+                    </Label>
+                    <Input
+                      id="instructor-meeting-proposed"
+                      type="datetime-local"
+                      value={proposedLocalDraft}
+                      onChange={(e) => setProposedLocalDraft(e.target.value)}
+                      className="h-9 w-full"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await updateMeetingProposedAt(selectedMeeting.id, datetimeLocalValueToIso(proposedLocalDraft));
+                          toast.success("Proposed time saved.");
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not save: ${msg}`);
+                        }
+                      }}
+                    >
+                      Save proposed time
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          setProposedLocalDraft("");
+                          await updateMeetingProposedAt(selectedMeeting.id, null);
+                          toast.success("Proposed time cleared.");
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not clear: ${msg}`);
+                        }
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               {selectedMeeting ? (
                 <div className="grid gap-6 lg:grid-cols-3">

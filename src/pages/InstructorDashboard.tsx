@@ -193,34 +193,38 @@ const InstructorDashboard = () => {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-serif text-xl font-semibold text-foreground">Team</h2>
-                <p className="text-sm text-muted-foreground">Assign students to this project from the course roster.</p>
+                <p className="text-sm text-muted-foreground">
+                  {isAdvisor ? "Project team members." : "Assign students to this project from the course roster."}
+                </p>
               </div>
-              <Select
-                onValueChange={async (studentId) => {
-                  try {
-                    await assignStudentToProject(project.id, studentId);
-                    toast.success("Student added to project.");
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : "Unknown error";
-                    toast.error(`Could not add student: ${msg}`);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-72">
-                  <SelectValue placeholder="Add student to project…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rosterIds
-                    .map((sid) => students.find((s) => s.id === sid))
-                    .filter((s): s is NonNullable<typeof s> => !!s)
-                    .filter((s) => !project.studentIds.includes(s.id))
-                    .map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              {!isAdvisor ? (
+                <Select
+                  onValueChange={async (studentId) => {
+                    try {
+                      await assignStudentToProject(project.id, studentId);
+                      toast.success("Student added to project.");
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Unknown error";
+                      toast.error(`Could not add student: ${msg}`);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-72">
+                    <SelectValue placeholder="Add student to project…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rosterIds
+                      .map((sid) => students.find((s) => s.id === sid))
+                      .filter((s): s is NonNullable<typeof s> => !!s)
+                      .filter((s) => !project.studentIds.includes(s.id))
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -234,20 +238,22 @@ const InstructorDashboard = () => {
                   >
                     <Avatar userId={sid} size={20} />
                     {s.name}
-                    <button
-                      onClick={async () => {
-                        try {
-                          await removeStudentFromProject(project.id, sid);
-                          toast.success("Student removed from project.");
-                        } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
-                          toast.error(`Could not remove student: ${msg}`);
-                        }
-                      }}
-                      className="ml-1 text-muted-foreground hover:text-destructive"
-                    >
-                      ×
-                    </button>
+                    {!isAdvisor ? (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await removeStudentFromProject(project.id, sid);
+                            toast.success("Student removed from project.");
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Unknown error";
+                            toast.error(`Could not remove student: ${msg}`);
+                          }
+                        }}
+                        className="ml-1 text-muted-foreground hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    ) : null}
                   </span>
                 );
               })}

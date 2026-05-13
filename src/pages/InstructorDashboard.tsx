@@ -94,11 +94,15 @@ const InstructorDashboard = () => {
   const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
   const selectedCourse = selectedProject ? allCourses.find((c) => c.id === selectedProject.courseId) : null;
   const advisors = useMemo(() => {
-    const ids = selectedCourse?.instructorIds ?? [];
-    return ids
+    const ids = [
+      ...((selectedCourse?.instructorIds ?? []) as string[]),
+      ...(((selectedProject?.assignedAdvisorIds ?? []) as string[]) ?? []),
+    ];
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
+    return uniq
       .map((id) => users.find((u) => u.id === id))
       .filter((u): u is NonNullable<typeof u> => !!u);
-  }, [selectedCourse?.instructorIds, users]);
+  }, [selectedCourse?.instructorIds?.join("|"), selectedProject?.assignedAdvisorIds?.join("|"), users]);
 
   const projectMeetings = useMemo(() => {
     if (!selectedProject) return [];
@@ -122,9 +126,13 @@ const InstructorDashboard = () => {
 
   useEffect(() => {
     if (!selectedCourse) return;
-    const ids = selectedCourse.instructorIds ?? [];
-    setAdvisorId((prev) => (prev && ids.includes(prev) ? prev : ids[0] ?? ""));
-  }, [selectedCourse?.id, selectedCourse?.instructorIds?.join("|")]);
+    const ids = [
+      ...((selectedCourse.instructorIds ?? []) as string[]),
+      ...(((selectedProject?.assignedAdvisorIds ?? []) as string[]) ?? []),
+    ];
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
+    setAdvisorId((prev) => (prev && uniq.includes(prev) ? prev : uniq[0] ?? ""));
+  }, [selectedCourse?.id, selectedCourse?.instructorIds?.join("|"), selectedProject?.assignedAdvisorIds?.join("|")]);
 
   useEffect(() => {
     setProposedLocalDraft(isoToDatetimeLocalValue(selectedMeeting?.proposedAt ?? null));

@@ -68,3 +68,22 @@ Send an `Authorization: Bearer <FIREBASE_ID_TOKEN>` header to:
 - `GET http://localhost:8080/me`
 
 The backend will verify the token using Firebase Admin and return your `uid` (and email if present).
+
+### 5) Frontend configuration
+
+Copy vite.config.ts.example to vite.config.ts, and modify the frontend port if necessary. 
+
+Copy .env.example to .env and fill in the necessary firebase information, and modify the backend address if necessary. 
+
+## Run on production server
+
+yarn 
+npm run build
+
+pm2 start npm --name pgortrack-frontend -- run preview
+
+cd backend
+npm i 
+npm run build
+
+pm2 start npm --name pgortrack-backend -- start

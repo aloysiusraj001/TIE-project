@@ -184,7 +184,7 @@ app.patch("/admin/users/:id/role", requireFirebaseAuth, requireAdminRole, async 
   if (!userId || !nextRole) {
     return res.status(400).json({ error: "user id and role are required" });
   }
-  if (!["admin", "instructor", "student"].includes(nextRole)) {
+  if (!["admin", "instructor", "advisor", "student"].includes(nextRole)) {
     return res.status(400).json({ error: "Invalid role" });
   }
 

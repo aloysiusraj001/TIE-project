@@ -789,7 +789,7 @@ app.post("/purchaseRequests", requireFirebaseAuth, async (req, res) => {
   return res.json({ ok: true, id });
 });
 
-app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireStaffOrAdmin, async (req, res) => {
+app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
   const reviewer = (req as any).appUser as { id?: string; role?: string } | undefined;
   if (!reviewer?.id) return res.status(403).json({ error: "Missing user profile" });
 
@@ -818,9 +818,6 @@ app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireStaffOrAdm
       }),
     );
     if (res.headersSent) return;
-  } else if (reviewer.role === "advisor") {
-    const assignedAdvisorIds = (projSnap.get("assignedAdvisorIds") as string[] | undefined) ?? [];
-    if (!assignedAdvisorIds.includes(reviewer.id)) return res.status(403).json({ error: "Not assigned to this project" });
   }
 
   const now = new Date().toISOString();

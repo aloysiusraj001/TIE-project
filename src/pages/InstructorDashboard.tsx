@@ -646,102 +646,104 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
-          <div className="mt-10">
-            <h2 className="mb-2 font-serif text-xl font-semibold text-foreground">
-              Purchase requests ({projectPRs.length})
-            </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Review project purchase requests. Approving/rejecting is separate from weekly updates.
-            </p>
+          {!isAdvisor ? (
+            <div className="mt-10">
+              <h2 className="mb-2 font-serif text-xl font-semibold text-foreground">
+                Purchase requests ({projectPRs.length})
+              </h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Review project purchase requests. Approving/rejecting is separate from weekly updates.
+              </p>
 
-            <div className="space-y-3">
-              {projectPRs.map((r) => {
-                const requester = users.find((u) => u.id === r.requesterId);
-                const prNote = prNotes[r.id] ?? "";
-                const locked = r.status !== "pending";
-                return (
-                  <Card key={r.id} className="academic-card p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium text-foreground">{r.item}</span>
-                          <span className="text-xs text-muted-foreground">×{r.quantity}</span>
-                          <StatusBadge status={r.status} />
+              <div className="space-y-3">
+                {projectPRs.map((r) => {
+                  const requester = users.find((u) => u.id === r.requesterId);
+                  const prNote = prNotes[r.id] ?? "";
+                  const locked = r.status !== "pending";
+                  return (
+                    <Card key={r.id} className="academic-card p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-foreground">{r.item}</span>
+                            <span className="text-xs text-muted-foreground">×{r.quantity}</span>
+                            <StatusBadge status={r.status} />
+                          </div>
+                          <div className="mt-1 text-sm text-muted-foreground">
+                            Requested by {requester?.name ?? "Unknown"} · Cost: {money.format(Number(r.cost) || 0)}
+                          </div>
+                          {r.link ? (
+                            <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">
+                              View item link
+                            </a>
+                          ) : null}
+                          <p className="mt-3 text-sm text-foreground">{r.justification}</p>
+                          {r.reviewNote ? (
+                            <p className="mt-3 text-sm text-muted-foreground">Review note: {r.reviewNote}</p>
+                          ) : null}
                         </div>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          Requested by {requester?.name ?? "Unknown"} · Cost: {money.format(Number(r.cost) || 0)}
+                        <div className="text-right text-xs text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleString()}
                         </div>
-                        {r.link ? (
-                          <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">
-                            View item link
-                          </a>
-                        ) : null}
-                        <p className="mt-3 text-sm text-foreground">{r.justification}</p>
-                        {r.reviewNote ? (
-                          <p className="mt-3 text-sm text-muted-foreground">Review note: {r.reviewNote}</p>
-                        ) : null}
                       </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        {new Date(r.createdAt).toLocaleString()}
-                      </div>
-                    </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label>Optional note to team</Label>
-                        <Textarea
-                          value={prNote}
-                          onChange={(e) => setPrNotes((s) => ({ ...s, [r.id]: e.target.value }))}
-                          rows={2}
-                          disabled={locked}
-                        />
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1.5 md:col-span-2">
+                          <Label>Optional note to team</Label>
+                          <Textarea
+                            value={prNote}
+                            onChange={(e) => setPrNotes((s) => ({ ...s, [r.id]: e.target.value }))}
+                            rows={2}
+                            disabled={locked}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 md:col-span-2">
+                          <Button
+                            variant="outline"
+                            disabled={locked}
+                            onClick={() => {
+                              try {
+                                reviewPurchaseRequest(r.id, "rejected", prNote);
+                                setPrNotes((s) => ({ ...s, [r.id]: "" }));
+                                toast.success("Request rejected.");
+                              } catch {
+                                toast.error("Could not update request.");
+                              }
+                            }}
+                          >
+                            Reject
+                          </Button>
+                          <Button
+                            disabled={locked}
+                            onClick={() => {
+                              try {
+                                reviewPurchaseRequest(r.id, "approved", prNote);
+                                setPrNotes((s) => ({ ...s, [r.id]: "" }));
+                                toast.success("Request approved.");
+                              } catch {
+                                toast.error("Could not update request.");
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                          {locked ? (
+                            <span className="text-xs text-muted-foreground">Locked after decision.</span>
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 md:col-span-2">
-                        <Button
-                          variant="outline"
-                          disabled={locked}
-                          onClick={() => {
-                            try {
-                              reviewPurchaseRequest(r.id, "rejected", prNote);
-                              setPrNotes((s) => ({ ...s, [r.id]: "" }));
-                              toast.success("Request rejected.");
-                            } catch {
-                              toast.error("Could not update request.");
-                            }
-                          }}
-                        >
-                          Reject
-                        </Button>
-                        <Button
-                          disabled={locked}
-                          onClick={() => {
-                            try {
-                              reviewPurchaseRequest(r.id, "approved", prNote);
-                              setPrNotes((s) => ({ ...s, [r.id]: "" }));
-                              toast.success("Request approved.");
-                            } catch {
-                              toast.error("Could not update request.");
-                            }
-                          }}
-                        >
-                          Approve
-                        </Button>
-                        {locked ? (
-                          <span className="text-xs text-muted-foreground">Locked after decision.</span>
-                        ) : null}
-                      </div>
-                    </div>
+                    </Card>
+                  );
+                })}
+
+                {projectPRs.length === 0 && (
+                  <Card className="academic-card p-8 text-center text-sm text-muted-foreground">
+                    No purchase requests for this project yet.
                   </Card>
-                );
-              })}
-
-              {projectPRs.length === 0 && (
-                <Card className="academic-card p-8 text-center text-sm text-muted-foreground">
-                  No purchase requests for this project yet.
-                </Card>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </AppShell>
     );

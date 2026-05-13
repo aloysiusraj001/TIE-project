@@ -33,7 +33,7 @@ const AdminDashboard = () => {
     addUser, deleteUser, updateUserRole,
     addCourse, assignInstructor, removeInstructor,
     addStudentToCourse, removeStudentFromCourse,
-    addProject, assignStudentToProject, removeStudentFromProject,
+    addProject, assignStudentToProject, removeStudentFromProject, updateProjectAdvisors,
   } = useApp();
 
   const nav = [{ to: "/admin", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
@@ -50,6 +50,7 @@ const AdminDashboard = () => {
   const [pCourse, setPCourse] = useState("");
 
   const instructors = users.filter((u) => u.role === "instructor");
+  const advisors = users.filter((u) => u.role === "advisor");
   const students = users.filter((u) => u.role === "student");
 
   return (
@@ -100,6 +101,7 @@ const AdminDashboard = () => {
                         <SelectContent>
                           <SelectItem value="admin">Administrator</SelectItem>
                           <SelectItem value="instructor">Instructor</SelectItem>
+                          <SelectItem value="advisor">Advisor</SelectItem>
                           <SelectItem value="student">Student</SelectItem>
                         </SelectContent>
                       </Select>
@@ -157,6 +159,7 @@ const AdminDashboard = () => {
                           <SelectContent>
                             <SelectItem value="admin">Administrator</SelectItem>
                             <SelectItem value="instructor">Instructor</SelectItem>
+                            <SelectItem value="advisor">Advisor</SelectItem>
                             <SelectItem value="student">Student</SelectItem>
                           </SelectContent>
                         </Select>
@@ -327,6 +330,55 @@ const AdminDashboard = () => {
                         {students.filter((s) => !p.studentIds.includes(s.id)).map((s) => (
                           <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+
+                    <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Advisors</div>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {((p.assignedAdvisorIds ?? []) as string[]).map((aid) => {
+                        const a = users.find((u) => u.id === aid);
+                        if (!a) return null;
+                        return (
+                          <span key={aid} className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs">
+                            <Avatar userId={aid} size={20} />
+                            {a.name}
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await updateProjectAdvisors(p.id, aid, "remove");
+                                  toast.success("Advisor removed from project.");
+                                } catch (e) {
+                                  const msg = e instanceof Error ? e.message : "Unknown error";
+                                  toast.error(`Could not remove advisor: ${msg}`);
+                                }
+                              }}
+                              className="ml-1 text-muted-foreground hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                      {(p.assignedAdvisorIds?.length ?? 0) === 0 && <span className="text-xs text-muted-foreground">No advisors assigned.</span>}
+                    </div>
+                    <Select
+                      onValueChange={async (aid) => {
+                        try {
+                          await updateProjectAdvisors(p.id, aid, "add");
+                          toast.success("Advisor assigned to project.");
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not assign advisor: ${msg}`);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Assign advisor to project…" /></SelectTrigger>
+                      <SelectContent>
+                        {advisors
+                          .filter((a) => !((p.assignedAdvisorIds ?? []) as string[]).includes(a.id))
+                          .map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </Card>

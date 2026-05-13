@@ -1,4 +1,4 @@
-export type Role = "admin" | "instructor" | "student";
+export type Role = "admin" | "instructor" | "advisor" | "student";
 
 export interface User {
   id: string;
@@ -27,6 +27,8 @@ export interface Project {
   name: string;
   description: string;
   studentIds: string[];
+  /** Project-scoped subject-matter advisors (do not imply course-wide access). */
+  assignedAdvisorIds?: string[];
   progress: number; // 0-100
 }
 

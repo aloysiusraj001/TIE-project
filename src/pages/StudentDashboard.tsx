@@ -93,6 +93,12 @@ const StudentDashboard = () => {
   }, [meetings, selectedProject?.id, advisorId]);
   const selectedMeeting: Meeting | undefined =
     projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
+  const meetingLocked = useMemo(() => {
+    if (!selectedMeeting) return false;
+    const newest = projectMeetings[0];
+    const hasNewer = newest ? newest.id !== selectedMeeting.id : false;
+    return selectedMeeting.status === "held" || hasNewer;
+  }, [projectMeetings, selectedMeeting?.id, selectedMeeting?.status]);
 
   useEffect(() => {
     // When switching projects or tracks, default to newest meeting.
@@ -387,12 +393,18 @@ const StudentDashboard = () => {
                 <div className="grid gap-6 lg:grid-cols-3">
                   <div>
                     <div className="mb-2 font-serif text-lg font-semibold text-foreground">Agenda</div>
+                    {meetingLocked ? (
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        Locked: this meeting is held or a newer meeting exists in this instructor thread.
+                      </div>
+                    ) : null}
                     <div className="space-y-2">
                       {agendaDraft.map((it, idx) => (
                         <div key={it.id} className="flex items-center gap-2">
                           <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
                           <Input
                             value={it.text}
+                            disabled={meetingLocked}
                             onChange={(e) =>
                               setAgendaDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
                             }
@@ -402,6 +414,7 @@ const StudentDashboard = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
+                            disabled={meetingLocked}
                             onClick={() => setAgendaDraft((xs) => xs.filter((x) => x.id !== it.id))}
                           >
                             ×
@@ -413,6 +426,7 @@ const StudentDashboard = () => {
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={() => setAgendaDraft((xs) => [...xs, newMeetingItem("", user.id)])}
                         >
                           Add agenda item
@@ -420,8 +434,13 @@ const StudentDashboard = () => {
                         <Button
                           type="button"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={async () => {
                             try {
+                              if (meetingLocked) {
+                                toast.error("Meeting is locked. Edit the latest draft meeting in this thread.");
+                                return;
+                              }
                               await updateMeetingAgenda(selectedMeeting.id, normalizeItems(agendaDraft, user.id));
                               toast.success("Agenda saved.");
                             } catch (e) {
@@ -438,12 +457,18 @@ const StudentDashboard = () => {
 
                   <div>
                     <div className="mb-2 font-serif text-lg font-semibold text-foreground">Action items</div>
+                    {meetingLocked ? (
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        Locked: this meeting is held or a newer meeting exists in this instructor thread.
+                      </div>
+                    ) : null}
                     <div className="space-y-2">
                       {actionsDraft.map((it, idx) => (
                         <div key={it.id} className="flex items-center gap-2">
                           <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
                           <Input
                             value={it.text}
+                            disabled={meetingLocked}
                             onChange={(e) =>
                               setActionsDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
                             }
@@ -453,6 +478,7 @@ const StudentDashboard = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
+                            disabled={meetingLocked}
                             onClick={() => setActionsDraft((xs) => xs.filter((x) => x.id !== it.id))}
                           >
                             ×
@@ -464,6 +490,7 @@ const StudentDashboard = () => {
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={() => setActionsDraft((xs) => [...xs, newMeetingItem("", user.id)])}
                         >
                           Add action item
@@ -471,8 +498,13 @@ const StudentDashboard = () => {
                         <Button
                           type="button"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={async () => {
                             try {
+                              if (meetingLocked) {
+                                toast.error("Meeting is locked. Edit the latest draft meeting in this thread.");
+                                return;
+                              }
                               await updateMeetingActionItems(selectedMeeting.id, normalizeItems(actionsDraft, user.id));
                               toast.success("Action items saved.");
                             } catch (e) {

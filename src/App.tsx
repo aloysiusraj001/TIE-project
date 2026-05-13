@@ -28,6 +28,7 @@ const AppInner = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/admin" element={<Protected role="admin"><AdminDashboard /></Protected>} />
         <Route path="/instructor" element={<Protected role="instructor"><InstructorDashboard /></Protected>} />
+        <Route path="/advisor" element={<Protected role="advisor"><InstructorDashboard /></Protected>} />
         <Route path="/student" element={<Protected role="student"><StudentDashboard /></Protected>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

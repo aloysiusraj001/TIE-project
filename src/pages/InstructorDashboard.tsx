@@ -17,6 +17,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import type { AdvisorThreadId, Meeting, MeetingItem } from "@/data/types";
 import { datetimeLocalValueToIso, formatMeetingOptionLabel, formatMeetingProposed, isoToDatetimeLocalValue } from "@/lib/meetingTime";
+import {
+  canAccessInstructorRoute,
+  isAdvisorOnlyView,
+  isUserCourseStaffForCourse,
+  shouldShowAdvisorHubLink,
+} from "@/lib/userCapabilities";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -79,17 +85,28 @@ const InstructorDashboard = () => {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
 
-  const isAdvisor = user.role === "advisor";
-  const courses = allCourses.filter((c) => c.instructorIds.includes(user.id));
-  const myProjects = isAdvisor
-    ? projects.filter((p) => (p.assignedAdvisorIds ?? []).includes(user.id))
-    : projects.filter((p) => courses.some((c) => c.id === p.courseId));
+  const courses = allCourses.filter((c) => (c.instructorIds ?? []).includes(user.id));
+  const isAdvisorOnly = isAdvisorOnlyView(user, allCourses);
+  const myProjects = useMemo(() => {
+    const inTaughtCourse = (p: (typeof projects)[number]) => courses.some((c) => c.id === p.courseId);
+    const assignedAsAdvisor = (p: (typeof projects)[number]) => (p.assignedAdvisorIds ?? []).includes(user.id);
+    const map = new Map<string, (typeof projects)[number]>();
+    for (const p of projects) {
+      if (inTaughtCourse(p) || assignedAsAdvisor(p)) map.set(p.id, p);
+    }
+    return Array.from(map.values());
+  }, [projects, courses, user.id]);
   const myUpdates = updates.filter((u) => myProjects.some((p) => p.id === u.projectId));
   const pendingUpdates = myUpdates.filter((u) => u.status === "pending");
   const pending = pendingUpdates.length;
   const students = users.filter((u) => u.role === "student");
 
-  const nav = [{ to: "/instructor", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
+  const overviewPath = canAccessInstructorRoute(user, allCourses) ? "/instructor" : "/advisor";
+  const showAdvisorHubLink = shouldShowAdvisorHubLink(user, allCourses, projects);
+  const nav = [
+    { to: overviewPath, label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
+    ...(showAdvisorHubLink ? [{ to: "/advisor" as const, label: "Advisor", icon: <UsersIcon className="h-4 w-4" /> }] : []),
+  ];
 
   const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
   const selectedCourse = selectedProject ? allCourses.find((c) => c.id === selectedProject.courseId) : null;
@@ -139,6 +156,10 @@ const InstructorDashboard = () => {
   }, [selectedMeeting?.id, selectedMeeting?.proposedAt]);
 
   useEffect(() => {
+    if (isAdvisorOnly && activeTab === "courses") setActiveTab("projects");
+  }, [isAdvisorOnly, activeTab]);
+
+  useEffect(() => {
     if (!selectedProject) return;
     setAgendaDraft(selectedMeeting?.agendaItems?.length ? selectedMeeting.agendaItems : [newMeetingItem("", user.id)]);
     setActionsDraft(selectedMeeting?.actionItems?.length ? selectedMeeting.actionItems : [newMeetingItem("", user.id)]);
@@ -147,7 +168,7 @@ const InstructorDashboard = () => {
 
   if (selectedProjectId) {
     const project = selectedProject!;
-    const course = courses.find((c) => c.id === project.courseId);
+    const course = allCourses.find((c) => c.id === project.courseId);
     const rosterIds = [...(course?.studentIds ?? [])];
     const projectUpdates = updates
       .filter((u) => u.projectId === project.id)
@@ -158,7 +179,7 @@ const InstructorDashboard = () => {
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
     return (
-      <AppShell roleLabel={isAdvisor ? "Advisor" : "Instructor"} nav={nav}>
+      <AppShell roleLabel={isAdvisorOnly ? "Advisor" : "Instructor"} nav={nav}>
         <div className="container mx-auto max-w-5xl px-6 py-8">
           <Button variant="ghost" size="sm" className="mb-4" onClick={() => setSelectedProjectId(null)}>
             <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to overview
@@ -194,10 +215,10 @@ const InstructorDashboard = () => {
               <div>
                 <h2 className="font-serif text-xl font-semibold text-foreground">Team</h2>
                 <p className="text-sm text-muted-foreground">
-                  {isAdvisor ? "Project team members." : "Assign students to this project from the course roster."}
+                  {isAdvisorOnly ? "Project team members." : "Assign students to this project from the course roster."}
                 </p>
               </div>
-              {!isAdvisor ? (
+              {!isAdvisorOnly ? (
                 <Select
                   onValueChange={async (studentId) => {
                     try {
@@ -238,7 +259,7 @@ const InstructorDashboard = () => {
                   >
                     <Avatar userId={sid} size={20} />
                     {s.name}
-                    {!isAdvisor ? (
+                    {!isAdvisorOnly ? (
                       <button
                         onClick={async () => {
                           try {
@@ -646,7 +667,7 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
-          {!isAdvisor ? (
+          {!isAdvisorOnly && isUserCourseStaffForCourse(user.id, course) ? (
             <div className="mt-10">
               <h2 className="mb-2 font-serif text-xl font-semibold text-foreground">
                 Purchase requests ({projectPRs.length})
@@ -750,7 +771,7 @@ const InstructorDashboard = () => {
   }
 
   return (
-    <AppShell roleLabel="Instructor" nav={nav}>
+    <AppShell roleLabel={isAdvisorOnly ? "Advisor" : "Instructor"} nav={nav}>
       <div className="container mx-auto max-w-7xl px-6 py-8">
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-semibold text-foreground">Welcome back, {user.name.split(" ")[1] ?? user.name}</h1>
@@ -763,7 +784,7 @@ const InstructorDashboard = () => {
           value={activeTab}
           onChange={setActiveTab}
           tabs={
-            isAdvisor
+            isAdvisorOnly
               ? [
                   { value: "projects", label: <>My projects ({myProjects.length})</> },
                   { value: "pending", label: <>Pending reviews ({pending})</> },
@@ -779,7 +800,7 @@ const InstructorDashboard = () => {
         {activeTab === "projects" && (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {myProjects.map((p) => {
-              const course = courses.find((c) => c.id === p.courseId);
+              const course = allCourses.find((c) => c.id === p.courseId);
               const lastUpdate = updates
                 .filter((u) => u.projectId === p.id)
                 .sort((a, b) => b.weekNumber - a.weekNumber)[0];
@@ -844,7 +865,7 @@ const InstructorDashboard = () => {
           </div>
         )}
 
-        {activeTab === "courses" && !isAdvisor && (
+        {activeTab === "courses" && !isAdvisorOnly && (
           <div className="mt-5 space-y-5">
             <Card className="academic-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">

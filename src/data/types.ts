@@ -27,6 +27,8 @@ export interface Project {
   name: string;
   description: string;
   studentIds: string[];
+  /** Project-scoped support staff (instructor accounts; do not imply course-wide access). */
+  assignedAdvisorIds?: string[];
   progress: number; // 0-100
 }
 
@@ -34,7 +36,7 @@ export type ApprovalStatus = "pending" | "approved" | "needs_revision";
 
 export type PurchaseRequestStatus = "pending" | "approved" | "rejected";
 
-/** Meeting thread key (instructor/advisor user id). */
+/** Meeting thread key: course instructor or project `assignedAdvisorIds` user id. */
 export type AdvisorThreadId = string;
 
 export interface MeetingItem {
@@ -58,7 +60,7 @@ export type MeetingStatus = "draft" | "held";
 export interface Meeting {
   id: string;
   projectId: string;
-  /** Meeting thread owner (instructor/advisor id). */
+  /** Meeting thread owner (instructor / project support id). */
   advisorId: AdvisorThreadId;
   /** Backward compatibility for older docs created before advisorId existed. */
   advisorTrack?: string;

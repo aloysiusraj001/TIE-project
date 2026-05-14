@@ -62,6 +62,7 @@ interface AppState {
   addProject: (p: Omit<Project, "id" | "progress">) => Promise<void>;
   assignStudentToProject: (projectId: string, studentId: string) => Promise<void>;
   removeStudentFromProject: (projectId: string, studentId: string) => Promise<void>;
+  updateProjectAdvisors: (projectId: string, advisorId: string, op: "add" | "remove") => Promise<void>;
 
   // updates
   submitUpdate: (u: Omit<WeeklyUpdate, "id" | "submittedAt" | "status" | "comments">) => void;
@@ -498,6 +499,13 @@ export const useApp = create<AppState>()((set, get) => {
         return;
       }
 
+      // Local-only fallback: enforce course roster gate even without backend.
+      const course = get().courses.find((c) => c.id === project.courseId);
+      const rosterIds = (course?.studentIds ?? []) as string[];
+      if (course && !rosterIds.includes(studentId)) {
+        throw new Error("Add student to the course first.");
+      }
+
       await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: [...project.studentIds, studentId],
       });
@@ -528,6 +536,31 @@ export const useApp = create<AppState>()((set, get) => {
       await updateDoc(doc(firestore, "projects", projectId), {
         studentIds: project.studentIds.filter((i) => i !== studentId),
       });
+    },
+
+    updateProjectAdvisors: async (projectId, advisorId, op) => {
+      const project = get().projects.find((p) => p.id === projectId);
+      if (!project) return;
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectId)}/advisors`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ advisorId, op }),
+        });
+        if (!res.ok) throw new Error(`Backend update project advisors failed (${res.status})`);
+        return;
+      }
+
+      const existing = (project.assignedAdvisorIds ?? []) as string[];
+      const next =
+        op === "add" ? Array.from(new Set([...existing, advisorId])) : existing.filter((x) => x !== advisorId);
+      await updateDoc(doc(firestore, "projects", projectId), { assignedAdvisorIds: next });
     },
 
     // updates

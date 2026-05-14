@@ -4,6 +4,15 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAuth, getFirestore } from "./firebaseAdmin.js";
+import {
+  readAssignedAdvisorIds,
+  readInstructorIds,
+  staffMayModerateWeeklyUpdate,
+  staffMayReviewPurchaseRequest,
+  userMayAccessProjectByMembership,
+  userMayCallInstructorEndpoints,
+  userMayCommentOnWeeklyUpdate,
+} from "./staffCapabilities.js";
 
 const app = express();
 app.use(express.json());
@@ -121,6 +130,17 @@ async function getCurrentUser(req: express.Request) {
 }
 
 async function requireInstructorOrAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const u = await getCurrentUser(req);
+  if (!u?.role) return res.status(403).json({ error: "Missing user profile" });
+  const db = getFirestore();
+  if (await userMayCallInstructorEndpoints(db, u)) {
+    (req as any).appUser = u;
+    return next();
+  }
+  return res.status(403).json({ error: "Instructor or admin role required" });
+}
+
+async function requireStaffOrAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const u = await getCurrentUser(req);
   if (!u?.role) return res.status(403).json({ error: "Missing user profile" });
   if (u.role !== "admin" && u.role !== "instructor") {
@@ -423,6 +443,47 @@ app.patch("/instructor/projects/:id/students", requireFirebaseAuth, requireInstr
   return res.json({ ok: true });
 });
 
+app.patch("/projects/:id/advisors", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
+  const projectId = (req.params.id ?? "").toString().trim();
+  const { advisorId, op } = (req.body ?? {}) as { advisorId?: string; op?: "add" | "remove" };
+  if (!projectId || !advisorId?.trim() || (op !== "add" && op !== "remove")) {
+    return res.status(400).json({ error: "projectId, advisorId, and op(add|remove) are required" });
+  }
+
+  const actor = (req as any).appUser as { id?: string; role?: string } | undefined;
+  if (!actor?.id || !actor.role) return res.status(403).json({ error: "Missing user profile" });
+
+  const db = getFirestore();
+  const projRef = db.collection("projects").doc(projectId);
+  const projSnap = await projRef.get();
+  if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
+
+  const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+  if (!courseId.trim()) return res.status(400).json({ error: "Project missing courseId" });
+
+  // Instructors can only assign project support for courses they are assigned to. Admins can always assign.
+  (req.params as any).id = courseId.trim();
+  await new Promise<void>((resolve) =>
+    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
+      if (err) throw err;
+      resolve();
+    }),
+  );
+  if (res.headersSent) return;
+
+  const advisorRole = await getUserRoleById(db, advisorId.trim());
+  if (advisorRole !== "instructor") {
+    return res.status(400).json({ error: "advisorId must be a user with role instructor" });
+  }
+
+  const existing = (projSnap.get("assignedAdvisorIds") as string[] | undefined) ?? [];
+  const next =
+    op === "add" ? Array.from(new Set([...existing, advisorId.trim()])) : existing.filter((x) => x !== advisorId.trim());
+
+  await projRef.update({ assignedAdvisorIds: next });
+  return res.json({ ok: true });
+});
+
 // UPDATES + PURCHASE REQUESTS
 // All writes happen via backend (Admin SDK); Firestore client rules can be read-only.
 
@@ -540,7 +601,7 @@ app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
 });
 
 // Reviewer edits (instructor/admin): allow adjusting fields like progress without resubmission constraints.
-app.patch("/updates/:id/reviewerEdit", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
+app.patch("/updates/:id/reviewerEdit", requireFirebaseAuth, requireStaffOrAdmin, async (req, res) => {
   const u = (req as any).appUser as { id?: string; role?: string } | undefined;
   if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
 
@@ -562,15 +623,11 @@ app.patch("/updates/:id/reviewerEdit", requireFirebaseAuth, requireInstructorOrA
   if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
   const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
 
-  // Instructors can only edit updates for courses they are assigned to.
-  (req.params as any).id = courseId;
-  await new Promise<void>((resolve) =>
-    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
-      if (err) throw err;
-      resolve();
-    }),
-  );
-  if (res.headersSent) return;
+  const courseSnap = courseId.trim() ? await db.collection("courses").doc(courseId.trim()).get() : null;
+  const courseInstructorIds = readInstructorIds(courseSnap);
+  const assignedAdvisorIds = readAssignedAdvisorIds(projSnap);
+  const mod = staffMayModerateWeeklyUpdate(u, courseInstructorIds, assignedAdvisorIds);
+  if (!mod.ok) return res.status(403).json({ error: mod.error });
 
   const fields: string[] = [];
   if (patch.thisWeekGoals) fields.push("thisWeekGoals");
@@ -603,7 +660,7 @@ app.patch("/updates/:id/reviewerEdit", requireFirebaseAuth, requireInstructorOrA
   return res.json({ ok: true });
 });
 
-app.patch("/updates/:id/status", requireFirebaseAuth, requireInstructorOrAdmin, async (req, res) => {
+app.patch("/updates/:id/status", requireFirebaseAuth, requireStaffOrAdmin, async (req, res) => {
   const u = (req as any).appUser as { id?: string; role?: string } | undefined;
   if (!u?.id) return res.status(403).json({ error: "Missing user profile" });
 
@@ -626,15 +683,11 @@ app.patch("/updates/:id/status", requireFirebaseAuth, requireInstructorOrAdmin, 
   if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
   const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
 
-  // Instructors can only review updates for courses they are assigned to.
-  (req.params as any).id = courseId;
-  await new Promise<void>((resolve) =>
-    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
-      if (err) throw err;
-      resolve();
-    }),
-  );
-  if (res.headersSent) return;
+  const courseSnap = courseId.trim() ? await db.collection("courses").doc(courseId.trim()).get() : null;
+  const courseInstructorIds = readInstructorIds(courseSnap);
+  const assignedAdvisorIds = readAssignedAdvisorIds(projSnap);
+  const mod = staffMayModerateWeeklyUpdate(u, courseInstructorIds, assignedAdvisorIds);
+  if (!mod.ok) return res.status(403).json({ error: mod.error });
 
   const now = new Date().toISOString();
   await ref.update({
@@ -669,10 +722,13 @@ app.post("/updates/:id/comments", requireFirebaseAuth, async (req, res) => {
 
   const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
   const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
-  const instructorIds = ((await db.collection("courses").doc(courseId).get()).get("instructorIds") as string[] | undefined) ?? [];
+  const courseSnap = courseId.trim() ? await db.collection("courses").doc(courseId.trim()).get() : null;
+  const instructorIds = readInstructorIds(courseSnap);
+  const assignedAdvisorIds = readAssignedAdvisorIds(projSnap);
 
-  const canComment = studentIds.includes(u.id) || instructorIds.includes(u.id) || u.role === "admin";
-  if (!canComment) return res.status(403).json({ error: "Not allowed to comment on this update" });
+  if (!userMayCommentOnWeeklyUpdate(u, studentIds, instructorIds, assignedAdvisorIds)) {
+    return res.status(403).json({ error: "Not allowed to comment on this update" });
+  }
 
   const commentId = uid("c");
   const now = new Date().toISOString();
@@ -748,14 +804,10 @@ app.patch("/purchaseRequests/:id/review", requireFirebaseAuth, requireInstructor
   if (!projSnap.exists) return res.status(404).json({ error: "Project not found" });
   const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
 
-  (req.params as any).id = courseId;
-  await new Promise<void>((resolve) =>
-    requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
-      if (err) throw err;
-      resolve();
-    }),
-  );
-  if (res.headersSent) return;
+  const courseSnap = courseId.trim() ? await db.collection("courses").doc(courseId.trim()).get() : null;
+  const courseInstructorIds = readInstructorIds(courseSnap);
+  const prAuth = staffMayReviewPurchaseRequest(reviewer, courseInstructorIds);
+  if (!prAuth.ok) return res.status(403).json({ error: prAuth.error });
 
   const now = new Date().toISOString();
   await ref.update({
@@ -797,13 +849,46 @@ async function canAccessProject(db: FirebaseFirestore.Firestore, projectId: stri
   if (!projSnap.exists) return { ok: false as const, status: 404, error: "Project not found" };
   const studentIds = (projSnap.get("studentIds") as string[] | undefined) ?? [];
   const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
+  const assignedAdvisorIds = (projSnap.get("assignedAdvisorIds") as string[] | undefined) ?? [];
   const courseSnap = courseId ? await db.collection("courses").doc(courseId).get() : null;
-  const instructorIds =
-    (courseSnap?.exists ? ((courseSnap.get("instructorIds") as string[] | undefined) ?? []) : []) ?? [];
-  const allowed = studentIds.includes(userId) || instructorIds.includes(userId);
+  const instructorIds = readInstructorIds(courseSnap);
+  const allowed = userMayAccessProjectByMembership(userId, role, studentIds, instructorIds, assignedAdvisorIds);
   return allowed
-    ? { ok: true as const, project: { courseId, studentIds, instructorIds } }
+    ? { ok: true as const, project: { courseId, studentIds, instructorIds, assignedAdvisorIds } }
     : { ok: false as const, status: 403, error: "Not allowed for this project" };
+}
+
+async function getUserRoleById(db: FirebaseFirestore.Firestore, userId: string) {
+  const snap = await db.collection("users").doc(userId).get();
+  if (!snap.exists) return null;
+  return (snap.get("role") as string | undefined) ?? null;
+}
+
+async function isMeetingLockedForEdits(
+  db: FirebaseFirestore.Firestore,
+  meetingSnap: FirebaseFirestore.DocumentSnapshot,
+) {
+  const status = (meetingSnap.get("status") as string | undefined) ?? "draft";
+  if (status === "held") return true;
+
+  const projectId = (meetingSnap.get("projectId") as string | undefined) ?? "";
+  const advisorId = (meetingSnap.get("advisorId") as string | undefined) ?? "";
+  const sequence = (meetingSnap.get("sequence") as number | undefined) ?? 0;
+  if (!projectId || !advisorId || !Number.isFinite(sequence) || sequence <= 0) return false;
+
+  // If any newer meeting exists in the same advisor thread, lock older meetings.
+  // Use the same indexed query pattern as meeting creation (projectId+advisorId orderBy sequence desc).
+  const latestSnap = await db
+    .collection("meetings")
+    .where("projectId", "==", projectId)
+    .where("advisorId", "==", advisorId)
+    .orderBy("sequence", "desc")
+    .limit(1)
+    .get();
+  const latest = latestSnap.docs[0];
+  const latestSeq = ((latest?.get("sequence") as number | undefined) ?? 0) as number;
+
+  return latestSeq > sequence;
 }
 
 app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) => {
@@ -828,10 +913,19 @@ app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) 
     const access = await canAccessProject(db, projectId, u.id, u.role);
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    const instructorIds = (access.project?.instructorIds ?? []) as string[];
     if (!advisorId) return res.status(400).json({ error: "advisorId is required" });
-    if (!instructorIds.includes(advisorId) && u.role !== "admin") {
-      return res.status(400).json({ error: "advisorId must be an instructor on the course" });
+    if (u.role !== "admin") {
+      const instructorIds = (access.project?.instructorIds ?? []) as string[];
+      const assignedAdvisorIds = (access.project?.assignedAdvisorIds ?? []) as string[];
+      const ok = instructorIds.includes(advisorId) || assignedAdvisorIds.includes(advisorId);
+      if (!ok) {
+        return res.status(400).json({ error: "advisorId must be a course instructor or on project assignedAdvisorIds" });
+      }
+    } else {
+      const role = await getUserRoleById(db, advisorId);
+      if (role !== "instructor") {
+        return res.status(400).json({ error: "advisorId must be a valid instructor user" });
+      }
     }
 
     // Next sequence number per (projectId, advisorId)
@@ -906,6 +1000,13 @@ app.patch("/meetings/:id/agenda", requireFirebaseAuth, async (req, res) => {
   const access = await canAccessProject(db, projectId, u.id, u.role);
   if (!access.ok) return res.status(access.status).json({ error: access.error });
 
+  if (await isMeetingLockedForEdits(db, snap)) {
+    return res.status(409).json({
+      error:
+        "Meeting is locked. You can only edit agenda/action items on the latest draft meeting in this instructor thread.",
+    });
+  }
+
   const agendaItems = sanitizeItems((req.body ?? {}).agendaItems, u.id);
   const now = new Date().toISOString();
   await ref.update({ agendaItems, updatedAt: now, updatedBy: u.id });
@@ -925,6 +1026,13 @@ app.patch("/meetings/:id/actionItems", requireFirebaseAuth, async (req, res) => 
   const projectId = (snap.get("projectId") as string | undefined) ?? "";
   const access = await canAccessProject(db, projectId, u.id, u.role);
   if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  if (await isMeetingLockedForEdits(db, snap)) {
+    return res.status(409).json({
+      error:
+        "Meeting is locked. You can only edit agenda/action items on the latest draft meeting in this instructor thread.",
+    });
+  }
 
   const actionItems = sanitizeItems((req.body ?? {}).actionItems, u.id);
   const now = new Date().toISOString();

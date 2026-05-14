@@ -17,6 +17,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import type { AdvisorThreadId, Meeting, MeetingItem } from "@/data/types";
 import { datetimeLocalValueToIso, formatMeetingOptionLabel, formatMeetingProposed, isoToDatetimeLocalValue } from "@/lib/meetingTime";
+import {
+  isInstructorProjectOnlyView,
+  isProjectAdvisorWithoutCourseStaff,
+  isUserCourseStaffForCourse,
+  projectsVisibleOnInstructorHub,
+} from "@/lib/userCapabilities";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -79,8 +85,12 @@ const InstructorDashboard = () => {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
 
-  const courses = allCourses.filter((c) => c.instructorIds.includes(user.id));
-  const myProjects = projects.filter((p) => courses.some((c) => c.id === p.courseId));
+  const courses = allCourses.filter((c) => (c.instructorIds ?? []).includes(user.id));
+  const isProjectOnlyInstructor = isInstructorProjectOnlyView(user, allCourses);
+  const myProjects = useMemo(
+    () => projectsVisibleOnInstructorHub(user.id, allCourses, projects),
+    [projects, allCourses, user.id],
+  );
   const myUpdates = updates.filter((u) => myProjects.some((p) => p.id === u.projectId));
   const pendingUpdates = myUpdates.filter((u) => u.status === "pending");
   const pending = pendingUpdates.length;
@@ -91,11 +101,15 @@ const InstructorDashboard = () => {
   const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
   const selectedCourse = selectedProject ? allCourses.find((c) => c.id === selectedProject.courseId) : null;
   const advisors = useMemo(() => {
-    const ids = selectedCourse?.instructorIds ?? [];
-    return ids
+    const ids = [
+      ...((selectedCourse?.instructorIds ?? []) as string[]),
+      ...(((selectedProject?.assignedAdvisorIds ?? []) as string[]) ?? []),
+    ];
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
+    return uniq
       .map((id) => users.find((u) => u.id === id))
       .filter((u): u is NonNullable<typeof u> => !!u);
-  }, [selectedCourse?.instructorIds, users]);
+  }, [selectedCourse?.instructorIds?.join("|"), selectedProject?.assignedAdvisorIds?.join("|"), users]);
 
   const projectMeetings = useMemo(() => {
     if (!selectedProject) return [];
@@ -105,6 +119,12 @@ const InstructorDashboard = () => {
   }, [meetings, selectedProject?.id, advisorId]);
   const selectedMeeting: Meeting | undefined =
     projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
+  const meetingLocked = useMemo(() => {
+    if (!selectedMeeting) return false;
+    const newest = projectMeetings[0];
+    const hasNewer = newest ? newest.id !== selectedMeeting.id : false;
+    return selectedMeeting.status === "held" || hasNewer;
+  }, [projectMeetings, selectedMeeting?.id, selectedMeeting?.status]);
 
   useEffect(() => {
     setSelectedMeetingId(selectedMeeting?.id ?? null);
@@ -113,13 +133,21 @@ const InstructorDashboard = () => {
 
   useEffect(() => {
     if (!selectedCourse) return;
-    const ids = selectedCourse.instructorIds ?? [];
-    setAdvisorId((prev) => (prev && ids.includes(prev) ? prev : ids[0] ?? ""));
-  }, [selectedCourse?.id, selectedCourse?.instructorIds?.join("|")]);
+    const ids = [
+      ...((selectedCourse.instructorIds ?? []) as string[]),
+      ...(((selectedProject?.assignedAdvisorIds ?? []) as string[]) ?? []),
+    ];
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
+    setAdvisorId((prev) => (prev && uniq.includes(prev) ? prev : uniq[0] ?? ""));
+  }, [selectedCourse?.id, selectedCourse?.instructorIds?.join("|"), selectedProject?.assignedAdvisorIds?.join("|")]);
 
   useEffect(() => {
     setProposedLocalDraft(isoToDatetimeLocalValue(selectedMeeting?.proposedAt ?? null));
   }, [selectedMeeting?.id, selectedMeeting?.proposedAt]);
+
+  useEffect(() => {
+    if (isProjectOnlyInstructor && activeTab === "courses") setActiveTab("projects");
+  }, [isProjectOnlyInstructor, activeTab]);
 
   useEffect(() => {
     if (!selectedProject) return;
@@ -130,7 +158,10 @@ const InstructorDashboard = () => {
 
   if (selectedProjectId) {
     const project = selectedProject!;
-    const course = courses.find((c) => c.id === project.courseId);
+    const course = allCourses.find((c) => c.id === project.courseId);
+    const canManageCourseForThisProject = isUserCourseStaffForCourse(user.id, course);
+    const projectAdvisorOnlyView = isProjectAdvisorWithoutCourseStaff(user, project, allCourses);
+    const detailRoleLabel = projectAdvisorOnlyView ? "Project support" : "Instructor";
     const rosterIds = [...(course?.studentIds ?? [])];
     const projectUpdates = updates
       .filter((u) => u.projectId === project.id)
@@ -141,7 +172,7 @@ const InstructorDashboard = () => {
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
     return (
-      <AppShell roleLabel="Instructor" nav={nav}>
+      <AppShell roleLabel={detailRoleLabel} nav={nav}>
         <div className="container mx-auto max-w-5xl px-6 py-8">
           <Button variant="ghost" size="sm" className="mb-4" onClick={() => setSelectedProjectId(null)}>
             <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to overview
@@ -152,6 +183,14 @@ const InstructorDashboard = () => {
           </div>
           <h1 className="font-serif text-3xl font-semibold text-foreground">{project.name}</h1>
           <p className="mt-1 text-muted-foreground">{project.description}</p>
+
+          {projectAdvisorOnlyView ? (
+            <div className="mt-4 rounded-md border border-border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
+              You have <span className="font-medium text-foreground">project support</span> access for this team. You can
+              review weekly updates and meetings. Course setup, team roster changes, purchases, and other projects in
+              this course are managed by course instructors.
+            </div>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
@@ -176,34 +215,40 @@ const InstructorDashboard = () => {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-serif text-xl font-semibold text-foreground">Team</h2>
-                <p className="text-sm text-muted-foreground">Assign students to this project from the course roster.</p>
+                <p className="text-sm text-muted-foreground">
+                  {canManageCourseForThisProject
+                    ? "Assign students to this project from the course roster."
+                    : "Project team members (course instructors manage the roster)."}
+                </p>
               </div>
-              <Select
-                onValueChange={async (studentId) => {
-                  try {
-                    await assignStudentToProject(project.id, studentId);
-                    toast.success("Student added to project.");
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : "Unknown error";
-                    toast.error(`Could not add student: ${msg}`);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-72">
-                  <SelectValue placeholder="Add student to project…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rosterIds
-                    .map((sid) => students.find((s) => s.id === sid))
-                    .filter((s): s is NonNullable<typeof s> => !!s)
-                    .filter((s) => !project.studentIds.includes(s.id))
-                    .map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              {canManageCourseForThisProject ? (
+                <Select
+                  onValueChange={async (studentId) => {
+                    try {
+                      await assignStudentToProject(project.id, studentId);
+                      toast.success("Student added to project.");
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Unknown error";
+                      toast.error(`Could not add student: ${msg}`);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-72">
+                    <SelectValue placeholder="Add student to project…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rosterIds
+                      .map((sid) => students.find((s) => s.id === sid))
+                      .filter((s): s is NonNullable<typeof s> => !!s)
+                      .filter((s) => !project.studentIds.includes(s.id))
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -217,20 +262,22 @@ const InstructorDashboard = () => {
                   >
                     <Avatar userId={sid} size={20} />
                     {s.name}
-                    <button
-                      onClick={async () => {
-                        try {
-                          await removeStudentFromProject(project.id, sid);
-                          toast.success("Student removed from project.");
-                        } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
-                          toast.error(`Could not remove student: ${msg}`);
-                        }
-                      }}
-                      className="ml-1 text-muted-foreground hover:text-destructive"
-                    >
-                      ×
-                    </button>
+                    {!canManageCourseForThisProject ? null : (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await removeStudentFromProject(project.id, sid);
+                            toast.success("Student removed from project.");
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Unknown error";
+                            toast.error(`Could not remove student: ${msg}`);
+                          }
+                        }}
+                        className="ml-1 text-muted-foreground hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    )}
                   </span>
                 );
               })}
@@ -265,11 +312,11 @@ const InstructorDashboard = () => {
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="space-y-1.5 sm:min-w-[220px]">
                   <Label htmlFor="instructor-meeting-advisor" className="text-xs text-muted-foreground">
-                    Meeting thread (instructor)
+                    Meeting thread
                   </Label>
                   <Select value={advisorId || undefined} onValueChange={(v) => setAdvisorId(v)}>
                     <SelectTrigger id="instructor-meeting-advisor" className="h-9 w-full border-border bg-background sm:w-[260px]">
-                      <SelectValue placeholder="Choose instructor" />
+                      <SelectValue placeholder="Choose meeting lead" />
                     </SelectTrigger>
                     <SelectContent>
                       {advisors.map((a) => (
@@ -438,12 +485,18 @@ const InstructorDashboard = () => {
                 <div className="grid gap-6 lg:grid-cols-3">
                   <div>
                     <div className="mb-2 font-serif text-lg font-semibold text-foreground">Agenda</div>
+                    {meetingLocked ? (
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        Locked: this meeting is held or a newer meeting exists in this instructor thread.
+                      </div>
+                    ) : null}
                     <div className="space-y-2">
                       {agendaDraft.map((it, idx) => (
                         <div key={it.id} className="flex items-center gap-2">
                           <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
                           <Input
                             value={it.text}
+                            disabled={meetingLocked}
                             onChange={(e) =>
                               setAgendaDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
                             }
@@ -453,6 +506,7 @@ const InstructorDashboard = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
+                            disabled={meetingLocked}
                             onClick={() => setAgendaDraft((xs) => xs.filter((x) => x.id !== it.id))}
                           >
                             ×
@@ -464,6 +518,7 @@ const InstructorDashboard = () => {
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={() => setAgendaDraft((xs) => [...xs, newMeetingItem("", user.id)])}
                         >
                           Add agenda item
@@ -471,8 +526,13 @@ const InstructorDashboard = () => {
                         <Button
                           type="button"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={async () => {
                             try {
+                              if (meetingLocked) {
+                                toast.error("Meeting is locked. Edit the latest draft meeting in this thread.");
+                                return;
+                              }
                               await updateMeetingAgenda(selectedMeeting.id, normalizeItems(agendaDraft, user.id));
                               toast.success("Agenda saved.");
                             } catch (e) {
@@ -489,12 +549,18 @@ const InstructorDashboard = () => {
 
                   <div>
                     <div className="mb-2 font-serif text-lg font-semibold text-foreground">Action items</div>
+                    {meetingLocked ? (
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        Locked: this meeting is held or a newer meeting exists in this instructor thread.
+                      </div>
+                    ) : null}
                     <div className="space-y-2">
                       {actionsDraft.map((it, idx) => (
                         <div key={it.id} className="flex items-center gap-2">
                           <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
                           <Input
                             value={it.text}
+                            disabled={meetingLocked}
                             onChange={(e) =>
                               setActionsDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
                             }
@@ -504,6 +570,7 @@ const InstructorDashboard = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
+                            disabled={meetingLocked}
                             onClick={() => setActionsDraft((xs) => xs.filter((x) => x.id !== it.id))}
                           >
                             ×
@@ -515,6 +582,7 @@ const InstructorDashboard = () => {
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={() => setActionsDraft((xs) => [...xs, newMeetingItem("", user.id)])}
                         >
                           Add action item
@@ -522,8 +590,13 @@ const InstructorDashboard = () => {
                         <Button
                           type="button"
                           size="sm"
+                          disabled={meetingLocked}
                           onClick={async () => {
                             try {
+                              if (meetingLocked) {
+                                toast.error("Meeting is locked. Edit the latest draft meeting in this thread.");
+                                return;
+                              }
                               await updateMeetingActionItems(selectedMeeting.id, normalizeItems(actionsDraft, user.id));
                               toast.success("Action items saved.");
                             } catch (e) {
@@ -546,7 +619,7 @@ const InstructorDashboard = () => {
                           value={commentDraft}
                           onChange={(e) => setCommentDraft(e.target.value)}
                           rows={4}
-                          placeholder="Write a comment for the team/advisor…"
+                          placeholder="Write a comment for the team…"
                         />
                         <div className="flex justify-end">
                           <Button
@@ -597,102 +670,104 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
-          <div className="mt-10">
-            <h2 className="mb-2 font-serif text-xl font-semibold text-foreground">
-              Purchase requests ({projectPRs.length})
-            </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Review project purchase requests. Approving/rejecting is separate from weekly updates.
-            </p>
+          {canManageCourseForThisProject ? (
+            <div className="mt-10">
+              <h2 className="mb-2 font-serif text-xl font-semibold text-foreground">
+                Purchase requests ({projectPRs.length})
+              </h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Review project purchase requests. Approving/rejecting is separate from weekly updates.
+              </p>
 
-            <div className="space-y-3">
-              {projectPRs.map((r) => {
-                const requester = users.find((u) => u.id === r.requesterId);
-                const prNote = prNotes[r.id] ?? "";
-                const locked = r.status !== "pending";
-                return (
-                  <Card key={r.id} className="academic-card p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium text-foreground">{r.item}</span>
-                          <span className="text-xs text-muted-foreground">×{r.quantity}</span>
-                          <StatusBadge status={r.status} />
+              <div className="space-y-3">
+                {projectPRs.map((r) => {
+                  const requester = users.find((u) => u.id === r.requesterId);
+                  const prNote = prNotes[r.id] ?? "";
+                  const locked = r.status !== "pending";
+                  return (
+                    <Card key={r.id} className="academic-card p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-foreground">{r.item}</span>
+                            <span className="text-xs text-muted-foreground">×{r.quantity}</span>
+                            <StatusBadge status={r.status} />
+                          </div>
+                          <div className="mt-1 text-sm text-muted-foreground">
+                            Requested by {requester?.name ?? "Unknown"} · Cost: {money.format(Number(r.cost) || 0)}
+                          </div>
+                          {r.link ? (
+                            <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">
+                              View item link
+                            </a>
+                          ) : null}
+                          <p className="mt-3 text-sm text-foreground">{r.justification}</p>
+                          {r.reviewNote ? (
+                            <p className="mt-3 text-sm text-muted-foreground">Review note: {r.reviewNote}</p>
+                          ) : null}
                         </div>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          Requested by {requester?.name ?? "Unknown"} · Cost: {money.format(Number(r.cost) || 0)}
+                        <div className="text-right text-xs text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleString()}
                         </div>
-                        {r.link ? (
-                          <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">
-                            View item link
-                          </a>
-                        ) : null}
-                        <p className="mt-3 text-sm text-foreground">{r.justification}</p>
-                        {r.reviewNote ? (
-                          <p className="mt-3 text-sm text-muted-foreground">Review note: {r.reviewNote}</p>
-                        ) : null}
                       </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        {new Date(r.createdAt).toLocaleString()}
-                      </div>
-                    </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label>Optional note to team</Label>
-                        <Textarea
-                          value={prNote}
-                          onChange={(e) => setPrNotes((s) => ({ ...s, [r.id]: e.target.value }))}
-                          rows={2}
-                          disabled={locked}
-                        />
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1.5 md:col-span-2">
+                          <Label>Optional note to team</Label>
+                          <Textarea
+                            value={prNote}
+                            onChange={(e) => setPrNotes((s) => ({ ...s, [r.id]: e.target.value }))}
+                            rows={2}
+                            disabled={locked}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 md:col-span-2">
+                          <Button
+                            variant="outline"
+                            disabled={locked}
+                            onClick={() => {
+                              try {
+                                reviewPurchaseRequest(r.id, "rejected", prNote);
+                                setPrNotes((s) => ({ ...s, [r.id]: "" }));
+                                toast.success("Request rejected.");
+                              } catch {
+                                toast.error("Could not update request.");
+                              }
+                            }}
+                          >
+                            Reject
+                          </Button>
+                          <Button
+                            disabled={locked}
+                            onClick={() => {
+                              try {
+                                reviewPurchaseRequest(r.id, "approved", prNote);
+                                setPrNotes((s) => ({ ...s, [r.id]: "" }));
+                                toast.success("Request approved.");
+                              } catch {
+                                toast.error("Could not update request.");
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                          {locked ? (
+                            <span className="text-xs text-muted-foreground">Locked after decision.</span>
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 md:col-span-2">
-                        <Button
-                          variant="outline"
-                          disabled={locked}
-                          onClick={() => {
-                            try {
-                              reviewPurchaseRequest(r.id, "rejected", prNote);
-                              setPrNotes((s) => ({ ...s, [r.id]: "" }));
-                              toast.success("Request rejected.");
-                            } catch {
-                              toast.error("Could not update request.");
-                            }
-                          }}
-                        >
-                          Reject
-                        </Button>
-                        <Button
-                          disabled={locked}
-                          onClick={() => {
-                            try {
-                              reviewPurchaseRequest(r.id, "approved", prNote);
-                              setPrNotes((s) => ({ ...s, [r.id]: "" }));
-                              toast.success("Request approved.");
-                            } catch {
-                              toast.error("Could not update request.");
-                            }
-                          }}
-                        >
-                          Approve
-                        </Button>
-                        {locked ? (
-                          <span className="text-xs text-muted-foreground">Locked after decision.</span>
-                        ) : null}
-                      </div>
-                    </div>
+                    </Card>
+                  );
+                })}
+
+                {projectPRs.length === 0 && (
+                  <Card className="academic-card p-8 text-center text-sm text-muted-foreground">
+                    No purchase requests for this project yet.
                   </Card>
-                );
-              })}
-
-              {projectPRs.length === 0 && (
-                <Card className="academic-card p-8 text-center text-sm text-muted-foreground">
-                  No purchase requests for this project yet.
-                </Card>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </AppShell>
     );
@@ -711,17 +786,24 @@ const InstructorDashboard = () => {
         <SegmentedTabs<InstructorTab>
           value={activeTab}
           onChange={setActiveTab}
-          tabs={[
-            { value: "projects", label: <>My projects ({myProjects.length})</> },
-            { value: "pending", label: <>Pending reviews ({pending})</> },
-            { value: "courses", label: <>My courses ({courses.length})</> },
-          ]}
+          tabs={
+            isProjectOnlyInstructor
+              ? [
+                  { value: "projects", label: <>My projects ({myProjects.length})</> },
+                  { value: "pending", label: <>Pending reviews ({pending})</> },
+                ]
+              : [
+                  { value: "projects", label: <>My projects ({myProjects.length})</> },
+                  { value: "pending", label: <>Pending reviews ({pending})</> },
+                  { value: "courses", label: <>My courses ({courses.length})</> },
+                ]
+          }
         />
 
         {activeTab === "projects" && (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {myProjects.map((p) => {
-              const course = courses.find((c) => c.id === p.courseId);
+              const course = allCourses.find((c) => c.id === p.courseId);
               const lastUpdate = updates
                 .filter((u) => u.projectId === p.id)
                 .sort((a, b) => b.weekNumber - a.weekNumber)[0];
@@ -786,7 +868,7 @@ const InstructorDashboard = () => {
           </div>
         )}
 
-        {activeTab === "courses" && (
+        {activeTab === "courses" && !isProjectOnlyInstructor && (
           <div className="mt-5 space-y-5">
             <Card className="academic-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">

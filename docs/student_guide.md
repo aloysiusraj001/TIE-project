@@ -36,15 +36,16 @@ In the project workspace you’ll find:
 
 Use the update’s discussion area for clarification, links, and back-and-forth with the instructor.
 
-## 4) Meetings (one thread per instructor/advisor)
+## 4) Meetings (one thread per meeting lead)
 
 Meetings are organized into **threads** based on who the meeting is with.
 
 ### Choose a meeting thread
 
 Use **Meeting thread** dropdown to select who the meeting is with:
+
 - Course instructors
-- Any project-assigned advisor (SME) assigned to your team
+- Any instructor on your team’s **project support** list
 
 ### Create a meeting
 

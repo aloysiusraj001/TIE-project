@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { Role } from "@/data/types";
 import { useApp } from "@/data/store";
-import { canAccessAdvisorRoute, canAccessInstructorRoute, getPostLoginPath } from "@/lib/userCapabilities";
+import { canAccessInstructorRoute, getPostLoginPath } from "@/lib/userCapabilities";
 
 const Protected = ({ role, children }: { role: Role; children: ReactNode }) => {
   const authReady = useApp((s) => s.authReady);
@@ -15,10 +15,6 @@ const Protected = ({ role, children }: { role: Role; children: ReactNode }) => {
   if (!user) return <Navigate to="/login" replace />;
   if (role === "instructor") {
     if (!canAccessInstructorRoute(user, courses)) return <Navigate to={getPostLoginPath(user, courses, projects)} replace />;
-    return <>{children}</>;
-  }
-  if (role === "advisor") {
-    if (!canAccessAdvisorRoute(user, projects)) return <Navigate to={getPostLoginPath(user, courses, projects)} replace />;
     return <>{children}</>;
   }
   if (user.role !== role) return <Navigate to={getPostLoginPath(user, courses, projects)} replace />;

@@ -1,14 +1,11 @@
 /**
  * Staff access model (keep in sync with frontend `src/lib/userCapabilities.ts`):
  *
- * - **Course staff**: user id appears on `courses[].instructorIds` for the project's course.
- *   Both `role=instructor` and `role=advisor` can be course staff; advisors may also be
- *   project-scoped only (`assignedAdvisorIds`).
- * - **Project advisor**: user id on `projects[].assignedAdvisorIds` (instructors may appear here too).
- * - **Instructor HTTP surface** (`requireInstructorOrAdmin`): admin, any `instructor`, or an
- *   `advisor` who teaches at least one course (Firestore `instructorIds` array-contains).
+ * - **Course staff**: user id on `courses[].instructorIds` for the project's course.
+ * - **Project support**: user id on `projects[].assignedAdvisorIds` (extra staff; may overlap course list).
+ * - **Instructor HTTP surface** (`requireInstructorOrAdmin`): `admin` or `instructor` role.
  *
- * Prefer **capability checks** (lists on course/project documents) over raw `role` alone.
+ * Prefer **capability checks** (lists on course/project documents) over role alone.
  */
 
 import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
@@ -25,20 +22,15 @@ export function readAssignedAdvisorIds(projSnap: DocumentSnapshot | null | undef
   return ((projSnap.get("assignedAdvisorIds") as string[] | undefined) ?? []).filter(Boolean);
 }
 
-/** True if this user may call instructor-scoped HTTP routes (admin / instructor / teaching advisor). */
-export async function userMayCallInstructorEndpoints(db: Firestore, u: StaffUser): Promise<boolean> {
+/** True if this user may call instructor-scoped HTTP routes (`admin` or `instructor`). */
+export async function userMayCallInstructorEndpoints(_db: Firestore, u: StaffUser): Promise<boolean> {
   if (!u?.role) return false;
-  if (u.role === "admin" || u.role === "instructor") return true;
-  if (u.role === "advisor" && u.id) {
-    const teaches = await db.collection("courses").where("instructorIds", "array-contains", u.id).limit(1).get();
-    return !teaches.empty;
-  }
-  return false;
+  return u.role === "admin" || u.role === "instructor";
 }
 
 /**
- * Weekly-update moderation (reviewer edit / status): course staff, or advisor/instructor
- * explicitly assigned on the project.
+ * Weekly-update moderation (reviewer edit / status): course staff, or instructor explicitly
+ * assigned on the project via `assignedAdvisorIds`.
  */
 export function staffMayModerateWeeklyUpdate(
   u: StaffUser,
@@ -48,18 +40,14 @@ export function staffMayModerateWeeklyUpdate(
   if (u.role === "admin") return { ok: true };
   if (!u.id) return { ok: false, error: "Missing user profile" };
   if (courseInstructorIds.includes(u.id)) return { ok: true };
-  if (
-    (u.role === "advisor" || u.role === "instructor") &&
-    assignedAdvisorIds.includes(u.id)
-  ) {
+  if (u.role === "instructor" && assignedAdvisorIds.includes(u.id)) {
     return { ok: true };
   }
   return { ok: false, error: "Not allowed to moderate updates for this project" };
 }
 
 /**
- * Purchase request approval: **course instructors only** (list on the course), plus admin.
- * Matches “instructor-only purchase” while still allowing `role=advisor` who teach the course.
+ * Purchase request approval: people listed on the course’s `instructorIds`, plus admin.
  */
 export function staffMayReviewPurchaseRequest(
   u: StaffUser,
@@ -82,11 +70,11 @@ export function userMayAccessProjectByMembership(
   if (role === "admin") return true;
   if (studentIds.includes(userId)) return true;
   if (courseInstructorIds.includes(userId)) return true;
-  if ((role === "advisor" || role === "instructor") && assignedAdvisorIds.includes(userId)) return true;
+  if (role === "instructor" && assignedAdvisorIds.includes(userId)) return true;
   return false;
 }
 
-/** Comments on weekly updates: roster + course staff + anyone listed as project advisor. */
+/** Comments on weekly updates: roster + course staff + anyone on `assignedAdvisorIds`. */
 export function userMayCommentOnWeeklyUpdate(
   u: StaffUser,
   studentIds: string[],

@@ -50,7 +50,10 @@ const AdminDashboard = () => {
   const [pCourse, setPCourse] = useState("");
 
   const instructors = users.filter((u) => u.role === "instructor");
-  const advisors = users.filter((u) => u.role === "advisor");
+  /** Course `instructorIds` — only `instructor` accounts. */
+  const courseInstructorCandidates = instructors;
+  /** Project `assignedAdvisorIds` — additional instructor accounts (same role as course staff). */
+  const projectAdvisorCandidates = instructors;
   const students = users.filter((u) => u.role === "student");
 
   return (
@@ -101,7 +104,6 @@ const AdminDashboard = () => {
                         <SelectContent>
                           <SelectItem value="admin">Administrator</SelectItem>
                           <SelectItem value="instructor">Instructor</SelectItem>
-                          <SelectItem value="advisor">Advisor</SelectItem>
                           <SelectItem value="student">Student</SelectItem>
                         </SelectContent>
                       </Select>
@@ -159,7 +161,6 @@ const AdminDashboard = () => {
                           <SelectContent>
                             <SelectItem value="admin">Administrator</SelectItem>
                             <SelectItem value="instructor">Instructor</SelectItem>
-                            <SelectItem value="advisor">Advisor</SelectItem>
                             <SelectItem value="student">Student</SelectItem>
                           </SelectContent>
                         </Select>
@@ -218,8 +219,10 @@ const AdminDashboard = () => {
                   <Select onValueChange={(v) => assignInstructor(c.id, v)}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Assign instructor…" /></SelectTrigger>
                     <SelectContent>
-                      {instructors.filter((i) => !c.instructorIds.includes(i.id)).map((i) => (
-                        <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                      {courseInstructorCandidates.filter((i) => !c.instructorIds.includes(i.id)).map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -335,7 +338,7 @@ const AdminDashboard = () => {
                       </SelectContent>
                     </Select>
 
-                    <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Advisors</div>
+                    <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Project support</div>
                     <div className="mb-3 flex flex-wrap gap-2">
                       {((p.assignedAdvisorIds ?? []) as string[]).map((aid) => {
                         const a = users.find((u) => u.id === aid);
@@ -348,10 +351,10 @@ const AdminDashboard = () => {
                               onClick={async () => {
                                 try {
                                   await updateProjectAdvisors(p.id, aid, "remove");
-                                  toast.success("Advisor removed from project.");
+                                  toast.success("Support staff removed from project.");
                                 } catch (e) {
                                   const msg = e instanceof Error ? e.message : "Unknown error";
-                                  toast.error(`Could not remove advisor: ${msg}`);
+                                  toast.error(`Could not remove: ${msg}`);
                                 }
                               }}
                               className="ml-1 text-muted-foreground hover:text-destructive"
@@ -361,25 +364,29 @@ const AdminDashboard = () => {
                           </span>
                         );
                       })}
-                      {(p.assignedAdvisorIds?.length ?? 0) === 0 && <span className="text-xs text-muted-foreground">No advisors assigned.</span>}
+                      {(p.assignedAdvisorIds?.length ?? 0) === 0 && (
+                        <span className="text-xs text-muted-foreground">No extra project staff yet.</span>
+                      )}
                     </div>
                     <Select
                       onValueChange={async (aid) => {
                         try {
                           await updateProjectAdvisors(p.id, aid, "add");
-                          toast.success("Advisor assigned to project.");
+                          toast.success("Instructor added to project support list.");
                         } catch (e) {
                           const msg = e instanceof Error ? e.message : "Unknown error";
-                          toast.error(`Could not assign advisor: ${msg}`);
+                          toast.error(`Could not assign: ${msg}`);
                         }
                       }}
                     >
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Assign advisor to project…" /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Add project support (instructor)…" /></SelectTrigger>
                       <SelectContent>
-                        {advisors
+                        {projectAdvisorCandidates
                           .filter((a) => !((p.assignedAdvisorIds ?? []) as string[]).includes(a.id))
                           .map((a) => (
-                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.name}
+                            </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>

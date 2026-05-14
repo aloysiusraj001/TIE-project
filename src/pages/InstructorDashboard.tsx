@@ -18,10 +18,10 @@ import { toast } from "sonner";
 import type { AdvisorThreadId, Meeting, MeetingItem } from "@/data/types";
 import { datetimeLocalValueToIso, formatMeetingOptionLabel, formatMeetingProposed, isoToDatetimeLocalValue } from "@/lib/meetingTime";
 import {
-  canAccessInstructorRoute,
-  isAdvisorOnlyView,
+  isInstructorProjectOnlyView,
+  isProjectAdvisorWithoutCourseStaff,
   isUserCourseStaffForCourse,
-  shouldShowAdvisorHubLink,
+  projectsVisibleOnInstructorHub,
 } from "@/lib/userCapabilities";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
@@ -86,27 +86,17 @@ const InstructorDashboard = () => {
   const [creatingProject, setCreatingProject] = useState(false);
 
   const courses = allCourses.filter((c) => (c.instructorIds ?? []).includes(user.id));
-  const isAdvisorOnly = isAdvisorOnlyView(user, allCourses);
-  const myProjects = useMemo(() => {
-    const inTaughtCourse = (p: (typeof projects)[number]) => courses.some((c) => c.id === p.courseId);
-    const assignedAsAdvisor = (p: (typeof projects)[number]) => (p.assignedAdvisorIds ?? []).includes(user.id);
-    const map = new Map<string, (typeof projects)[number]>();
-    for (const p of projects) {
-      if (inTaughtCourse(p) || assignedAsAdvisor(p)) map.set(p.id, p);
-    }
-    return Array.from(map.values());
-  }, [projects, courses, user.id]);
+  const isProjectOnlyInstructor = isInstructorProjectOnlyView(user, allCourses);
+  const myProjects = useMemo(
+    () => projectsVisibleOnInstructorHub(user.id, allCourses, projects),
+    [projects, allCourses, user.id],
+  );
   const myUpdates = updates.filter((u) => myProjects.some((p) => p.id === u.projectId));
   const pendingUpdates = myUpdates.filter((u) => u.status === "pending");
   const pending = pendingUpdates.length;
   const students = users.filter((u) => u.role === "student");
 
-  const overviewPath = canAccessInstructorRoute(user, allCourses) ? "/instructor" : "/advisor";
-  const showAdvisorHubLink = shouldShowAdvisorHubLink(user, allCourses, projects);
-  const nav = [
-    { to: overviewPath, label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
-    ...(showAdvisorHubLink ? [{ to: "/advisor" as const, label: "Advisor", icon: <UsersIcon className="h-4 w-4" /> }] : []),
-  ];
+  const nav = [{ to: "/instructor", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
 
   const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
   const selectedCourse = selectedProject ? allCourses.find((c) => c.id === selectedProject.courseId) : null;
@@ -156,8 +146,8 @@ const InstructorDashboard = () => {
   }, [selectedMeeting?.id, selectedMeeting?.proposedAt]);
 
   useEffect(() => {
-    if (isAdvisorOnly && activeTab === "courses") setActiveTab("projects");
-  }, [isAdvisorOnly, activeTab]);
+    if (isProjectOnlyInstructor && activeTab === "courses") setActiveTab("projects");
+  }, [isProjectOnlyInstructor, activeTab]);
 
   useEffect(() => {
     if (!selectedProject) return;
@@ -169,6 +159,9 @@ const InstructorDashboard = () => {
   if (selectedProjectId) {
     const project = selectedProject!;
     const course = allCourses.find((c) => c.id === project.courseId);
+    const canManageCourseForThisProject = isUserCourseStaffForCourse(user.id, course);
+    const projectAdvisorOnlyView = isProjectAdvisorWithoutCourseStaff(user, project, allCourses);
+    const detailRoleLabel = projectAdvisorOnlyView ? "Project support" : "Instructor";
     const rosterIds = [...(course?.studentIds ?? [])];
     const projectUpdates = updates
       .filter((u) => u.projectId === project.id)
@@ -179,7 +172,7 @@ const InstructorDashboard = () => {
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
     return (
-      <AppShell roleLabel={isAdvisorOnly ? "Advisor" : "Instructor"} nav={nav}>
+      <AppShell roleLabel={detailRoleLabel} nav={nav}>
         <div className="container mx-auto max-w-5xl px-6 py-8">
           <Button variant="ghost" size="sm" className="mb-4" onClick={() => setSelectedProjectId(null)}>
             <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to overview
@@ -190,6 +183,14 @@ const InstructorDashboard = () => {
           </div>
           <h1 className="font-serif text-3xl font-semibold text-foreground">{project.name}</h1>
           <p className="mt-1 text-muted-foreground">{project.description}</p>
+
+          {projectAdvisorOnlyView ? (
+            <div className="mt-4 rounded-md border border-border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
+              You have <span className="font-medium text-foreground">project support</span> access for this team. You can
+              review weekly updates and meetings. Course setup, team roster changes, purchases, and other projects in
+              this course are managed by course instructors.
+            </div>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
@@ -215,10 +216,12 @@ const InstructorDashboard = () => {
               <div>
                 <h2 className="font-serif text-xl font-semibold text-foreground">Team</h2>
                 <p className="text-sm text-muted-foreground">
-                  {isAdvisorOnly ? "Project team members." : "Assign students to this project from the course roster."}
+                  {canManageCourseForThisProject
+                    ? "Assign students to this project from the course roster."
+                    : "Project team members (course instructors manage the roster)."}
                 </p>
               </div>
-              {!isAdvisorOnly ? (
+              {canManageCourseForThisProject ? (
                 <Select
                   onValueChange={async (studentId) => {
                     try {
@@ -259,7 +262,7 @@ const InstructorDashboard = () => {
                   >
                     <Avatar userId={sid} size={20} />
                     {s.name}
-                    {!isAdvisorOnly ? (
+                    {!canManageCourseForThisProject ? null : (
                       <button
                         onClick={async () => {
                           try {
@@ -274,7 +277,7 @@ const InstructorDashboard = () => {
                       >
                         ×
                       </button>
-                    ) : null}
+                    )}
                   </span>
                 );
               })}
@@ -309,11 +312,11 @@ const InstructorDashboard = () => {
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="space-y-1.5 sm:min-w-[220px]">
                   <Label htmlFor="instructor-meeting-advisor" className="text-xs text-muted-foreground">
-                    Meeting thread (instructor)
+                    Meeting thread
                   </Label>
                   <Select value={advisorId || undefined} onValueChange={(v) => setAdvisorId(v)}>
                     <SelectTrigger id="instructor-meeting-advisor" className="h-9 w-full border-border bg-background sm:w-[260px]">
-                      <SelectValue placeholder="Choose instructor" />
+                      <SelectValue placeholder="Choose meeting lead" />
                     </SelectTrigger>
                     <SelectContent>
                       {advisors.map((a) => (
@@ -616,7 +619,7 @@ const InstructorDashboard = () => {
                           value={commentDraft}
                           onChange={(e) => setCommentDraft(e.target.value)}
                           rows={4}
-                          placeholder="Write a comment for the team/advisor…"
+                          placeholder="Write a comment for the team…"
                         />
                         <div className="flex justify-end">
                           <Button
@@ -667,7 +670,7 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
-          {!isAdvisorOnly && isUserCourseStaffForCourse(user.id, course) ? (
+          {canManageCourseForThisProject ? (
             <div className="mt-10">
               <h2 className="mb-2 font-serif text-xl font-semibold text-foreground">
                 Purchase requests ({projectPRs.length})
@@ -771,7 +774,7 @@ const InstructorDashboard = () => {
   }
 
   return (
-    <AppShell roleLabel={isAdvisorOnly ? "Advisor" : "Instructor"} nav={nav}>
+    <AppShell roleLabel="Instructor" nav={nav}>
       <div className="container mx-auto max-w-7xl px-6 py-8">
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-semibold text-foreground">Welcome back, {user.name.split(" ")[1] ?? user.name}</h1>
@@ -784,7 +787,7 @@ const InstructorDashboard = () => {
           value={activeTab}
           onChange={setActiveTab}
           tabs={
-            isAdvisorOnly
+            isProjectOnlyInstructor
               ? [
                   { value: "projects", label: <>My projects ({myProjects.length})</> },
                   { value: "pending", label: <>Pending reviews ({pending})</> },
@@ -865,7 +868,7 @@ const InstructorDashboard = () => {
           </div>
         )}
 
-        {activeTab === "courses" && !isAdvisorOnly && (
+        {activeTab === "courses" && !isProjectOnlyInstructor && (
           <div className="mt-5 space-y-5">
             <Card className="academic-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">

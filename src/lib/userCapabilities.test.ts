@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Course, Project, User } from "@/data/types";
 import {
-  canAccessAdvisorRoute,
   canAccessInstructorRoute,
   getPostLoginPath,
-  isAdvisorOnlyView,
+  isInstructorProjectOnlyView,
+  isProjectAdvisorWithoutCourseStaff,
   isUserCourseStaffForCourse,
-  shouldShowAdvisorHubLink,
+  projectsVisibleOnInstructorHub,
 } from "./userCapabilities";
 
 const course = (over: Partial<Course>): Course =>
@@ -42,78 +42,67 @@ const user = (over: Partial<User>): User =>
   }) as User;
 
 describe("canAccessInstructorRoute", () => {
-  it("allows instructors regardless of course lists", () => {
-    const u = user({ id: "x", role: "instructor" });
-    expect(canAccessInstructorRoute(u, [])).toBe(true);
+  it("allows instructors", () => {
+    expect(canAccessInstructorRoute(user({ role: "instructor" }), [])).toBe(true);
   });
 
-  it("allows advisors listed on a course", () => {
-    const u = user({ id: "a1", role: "advisor" });
-    const courses = [course({ instructorIds: ["a1"] })];
-    expect(canAccessInstructorRoute(u, courses)).toBe(true);
-  });
-
-  it("denies advisors with no teaching assignment", () => {
-    const u = user({ id: "a1", role: "advisor" });
-    expect(canAccessInstructorRoute(u, [course({ instructorIds: ["ins1"] })])).toBe(false);
-  });
-});
-
-describe("canAccessAdvisorRoute", () => {
-  it("allows any advisor user", () => {
-    expect(canAccessAdvisorRoute(user({ role: "advisor" }), [])).toBe(true);
-  });
-
-  it("allows instructors with project advisor assignments", () => {
-    const u = user({ id: "i1", role: "instructor" });
-    const projects = [project({ assignedAdvisorIds: ["i1"] })];
-    expect(canAccessAdvisorRoute(u, projects)).toBe(true);
-  });
-
-  it("denies instructors without advisor assignments", () => {
-    const u = user({ id: "i1", role: "instructor" });
-    expect(canAccessAdvisorRoute(u, [project({ assignedAdvisorIds: ["a1"] })])).toBe(false);
+  it("denies non-instructors", () => {
+    expect(canAccessInstructorRoute(user({ role: "student" }), [])).toBe(false);
   });
 });
 
 describe("getPostLoginPath", () => {
-  it("sends teaching advisors to instructor hub", () => {
-    const u = user({ id: "a1", role: "advisor" });
-    const courses = [course({ instructorIds: ["a1"] })];
-    expect(getPostLoginPath(u, courses, [])).toBe("/instructor");
-  });
-
-  it("sends advisor-only users to advisor hub", () => {
-    const u = user({ id: "a1", role: "advisor" });
-    expect(getPostLoginPath(u, [course({ instructorIds: ["ins1"] })], [])).toBe("/advisor");
+  it("sends instructors to instructor hub", () => {
+    expect(getPostLoginPath(user({ role: "instructor" }), [], [])).toBe("/instructor");
   });
 });
 
-describe("isAdvisorOnlyView", () => {
-  it("is true for advisors not on any course instructor list", () => {
-    const u = user({ role: "advisor", id: "a1" });
-    expect(isAdvisorOnlyView(u, [course({ instructorIds: ["ins1"] })])).toBe(true);
+describe("isInstructorProjectOnlyView", () => {
+  it("is true when instructor is not on any course instructor list", () => {
+    const u = user({ role: "instructor", id: "a1" });
+    expect(isInstructorProjectOnlyView(u, [course({ instructorIds: ["ins1"] })])).toBe(true);
   });
 
-  it("is false for teaching advisors", () => {
-    const u = user({ role: "advisor", id: "a1" });
-    expect(isAdvisorOnlyView(u, [course({ instructorIds: ["a1"] })])).toBe(false);
+  it("is false when instructor staffs a course", () => {
+    const u = user({ role: "instructor", id: "a1" });
+    expect(isInstructorProjectOnlyView(u, [course({ instructorIds: ["a1"] })])).toBe(false);
   });
 });
 
-describe("shouldShowAdvisorHubLink", () => {
-  it("is true when user uses instructor hub and has advisor project assignments", () => {
-    const u = user({ id: "i1", role: "instructor" });
-    const courses: Course[] = [];
-    const projects = [project({ assignedAdvisorIds: ["i1"] })];
-    expect(shouldShowAdvisorHubLink(u, courses, projects)).toBe(true);
+describe("projectsVisibleOnInstructorHub", () => {
+  it("includes all projects in staffed courses", () => {
+    const cX = course({ id: "cx", instructorIds: ["lilly"] });
+    const p1 = project({ id: "p1", courseId: "cx" });
+    const p2 = project({ id: "p2", courseId: "cx" });
+    const cY = course({ id: "cy", instructorIds: ["other"] });
+    const pA = project({ id: "pA", courseId: "cy", assignedAdvisorIds: ["lilly"] });
+    const pB = project({ id: "pB", courseId: "cy" });
+    const out = projectsVisibleOnInstructorHub("lilly", [cX, cY], [p1, p2, pA, pB]);
+    expect(out.map((p) => p.id).sort()).toEqual(["p1", "p2", "pA"].sort());
   });
 
-  it("is false without instructor-route access", () => {
-    const u = user({ id: "a1", role: "advisor" });
-    const courses = [course({ instructorIds: ["ins1"] })];
-    const projects = [project({ assignedAdvisorIds: ["a1"] })];
-    expect(shouldShowAdvisorHubLink(u, courses, projects)).toBe(false);
+  it("includes only assigned projects in unstaffed courses", () => {
+    const cY = course({ id: "cy", instructorIds: ["other"] });
+    const pA = project({ id: "pA", courseId: "cy", assignedAdvisorIds: ["lilly"] });
+    const pB = project({ id: "pB", courseId: "cy" });
+    const out = projectsVisibleOnInstructorHub("lilly", [cY], [pA, pB]);
+    expect(out.map((p) => p.id)).toEqual(["pA"]);
+  });
+});
+
+describe("isProjectAdvisorWithoutCourseStaff", () => {
+  it("is true when assigned on project but not course staff", () => {
+    const u = user({ id: "lilly", role: "instructor" });
+    const cY = course({ id: "cy", instructorIds: ["other"] });
+    const pA = project({ id: "pA", courseId: "cy", assignedAdvisorIds: ["lilly"] });
+    expect(isProjectAdvisorWithoutCourseStaff(u, pA, [cY])).toBe(true);
+  });
+
+  it("is false when user is course staff for that course", () => {
+    const u = user({ id: "lilly", role: "instructor" });
+    const cX = course({ id: "cx", instructorIds: ["lilly"] });
+    const p = project({ id: "p1", courseId: "cx", assignedAdvisorIds: ["lilly"] });
+    expect(isProjectAdvisorWithoutCourseStaff(u, p, [cX])).toBe(false);
   });
 });
 

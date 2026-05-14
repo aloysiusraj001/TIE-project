@@ -4,8 +4,8 @@ This guide covers what **course instructors** can do: manage courses/projects, r
 
 ## 1) What you have access to
 
-- If you are a **course instructor**, you can see **all projects in the courses you teach**.
-- You can also assign **project-only advisors (SMEs)** to specific teams without giving them course-wide visibility.
+- If you are on a course’s **instructor list** (`instructorIds`), you can see **all projects in that course** and use full course tools (roster, new projects, purchase approvals for those projects, etc.).
+- You can add **extra instructor accounts** to a project’s **project support** list (`assignedAdvisorIds`) so they can help with meetings and weekly updates **for that team only**, without listing them on the whole course.
 
 ## 2) Courses, rosters, and projects
 
@@ -33,13 +33,14 @@ Students must be **on the course roster** before they can be added to a project.
 
 If a student isn’t listed, add them to the **course roster** first.
 
-### Assign project advisors (SMEs) to a project
+### Assign project support staff
 
-Project advisors are **project-scoped only**: they see only the teams you assign them to.
+Project support is **project-scoped**: those instructors see only the teams they are assigned to (not other projects in the same course unless they are also on the course instructor list).
 
-In Admin (or instructor UI if enabled), assign an advisor to a project:
-- Select advisor under **Advisors** for the project
-- Remove with **×**
+In **Admin → Projects**, use **Project support** for the project:
+
+- Pick another **instructor** account to add.
+- Remove with **×**.
 
 ## 3) Weekly updates (review workflow)
 
@@ -57,11 +58,11 @@ In Admin (or instructor UI if enabled), assign an advisor to a project:
 
 ## 4) Meetings (agenda/action items + comments)
 
-Meetings are organized into **threads** based on who the meeting is with (instructor/advisor).
+Meetings are organized into **threads** (one sequence per “meeting lead” user id — usually a course instructor or someone on project support).
 
 ### Choose a meeting thread
 
-Use **Meeting thread** to select which instructor/advisor thread you’re viewing.
+Use **Meeting thread** to select which lead’s thread you’re viewing.
 
 ### Create a meeting
 
@@ -69,6 +70,7 @@ Use **Meeting thread** to select which instructor/advisor thread you’re viewin
 - **New (inherit)**: copies previous meeting’s action items into the next agenda
 
 Optional:
+
 - Set/clear **Proposed meeting date & time**
 
 ### Agenda & action items
@@ -78,6 +80,7 @@ Optional:
 ### Meeting locking
 
 Agenda/action items are locked when either:
+
 - Meeting is **held**, OR
 - A **newer meeting exists** in that thread (older meetings become read-only)
 
@@ -86,11 +89,10 @@ Comments remain open for back-and-forth even when the meeting is locked.
 ## 5) Purchase requests (approvals)
 
 - Purchase requests are per-project.
-- **Only course instructors/admins** can approve/reject purchase requests.
+- **Only people on the course’s instructor list** (plus admins) can approve/reject purchase requests for projects in that course.
 - After approval/rejection, the request becomes **locked**.
 
-## 6) Advisors vs instructors (important distinction)
+## 6) Course staff vs project-only access
 
-- **Instructors**: course-wide visibility and management.
-- **Advisors (SMEs)**: project-only visibility; they can participate in meetings/feedback for assigned teams, but do not manage the course roster or approve purchases.
-
+- **Course instructors** (on `instructorIds`): course-wide visibility and management for that course.
+- **Project support only** (on `assignedAdvisorIds` but not the course’s `instructorIds`): that project’s weekly updates and meetings only — no course roster changes or purchase approvals for that course.

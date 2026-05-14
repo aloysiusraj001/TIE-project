@@ -228,11 +228,11 @@ const StudentDashboard = () => {
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="space-y-1.5 sm:min-w-[220px]">
                   <Label htmlFor="student-meeting-advisor" className="text-xs text-muted-foreground">
-                    Meeting thread (instructor)
+                    Meeting thread
                   </Label>
                   <Select value={advisorId || undefined} onValueChange={(v) => setAdvisorId(v)}>
                     <SelectTrigger id="student-meeting-advisor" className="h-9 w-full border-border bg-background sm:w-[260px]">
-                      <SelectValue placeholder="Choose instructor" />
+                      <SelectValue placeholder="Choose meeting lead" />
                     </SelectTrigger>
                     <SelectContent>
                       {advisors.map((a) => (
@@ -535,7 +535,7 @@ const StudentDashboard = () => {
                           value={commentDraft}
                           onChange={(e) => setCommentDraft(e.target.value)}
                           rows={4}
-                          placeholder="Write a comment for your team/advisor…"
+                          placeholder="Write a comment for your team…"
                         />
                         <div className="flex justify-end">
                           <Button

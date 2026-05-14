@@ -143,8 +143,8 @@ async function requireInstructorOrAdmin(req: express.Request, res: express.Respo
 async function requireStaffOrAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const u = await getCurrentUser(req);
   if (!u?.role) return res.status(403).json({ error: "Missing user profile" });
-  if (u.role !== "admin" && u.role !== "instructor" && u.role !== "advisor") {
-    return res.status(403).json({ error: "Advisor, instructor, or admin role required" });
+  if (u.role !== "admin" && u.role !== "instructor") {
+    return res.status(403).json({ error: "Instructor or admin role required" });
   }
   (req as any).appUser = u;
   return next();
@@ -194,7 +194,7 @@ app.patch("/admin/users/:id/role", requireFirebaseAuth, requireAdminRole, async 
   if (!userId || !nextRole) {
     return res.status(400).json({ error: "user id and role are required" });
   }
-  if (!["admin", "instructor", "advisor", "student"].includes(nextRole)) {
+  if (!["admin", "instructor", "student"].includes(nextRole)) {
     return res.status(400).json({ error: "Invalid role" });
   }
 
@@ -461,7 +461,7 @@ app.patch("/projects/:id/advisors", requireFirebaseAuth, requireInstructorOrAdmi
   const courseId = (projSnap.get("courseId") as string | undefined) ?? "";
   if (!courseId.trim()) return res.status(400).json({ error: "Project missing courseId" });
 
-  // Instructors can only assign advisors for courses they are assigned to. Admins can always assign.
+  // Instructors can only assign project support for courses they are assigned to. Admins can always assign.
   (req.params as any).id = courseId.trim();
   await new Promise<void>((resolve) =>
     requireInstructorAssignedToCourse(req, res, (err?: unknown) => {
@@ -472,7 +472,9 @@ app.patch("/projects/:id/advisors", requireFirebaseAuth, requireInstructorOrAdmi
   if (res.headersSent) return;
 
   const advisorRole = await getUserRoleById(db, advisorId.trim());
-  if (advisorRole !== "advisor") return res.status(400).json({ error: "advisorId must be a user with role=advisor" });
+  if (advisorRole !== "instructor") {
+    return res.status(400).json({ error: "advisorId must be a user with role instructor" });
+  }
 
   const existing = (projSnap.get("assignedAdvisorIds") as string[] | undefined) ?? [];
   const next =
@@ -917,12 +919,12 @@ app.post("/projects/:projectId/meetings", requireFirebaseAuth, async (req, res) 
       const assignedAdvisorIds = (access.project?.assignedAdvisorIds ?? []) as string[];
       const ok = instructorIds.includes(advisorId) || assignedAdvisorIds.includes(advisorId);
       if (!ok) {
-        return res.status(400).json({ error: "advisorId must be a course instructor or a project-assigned advisor" });
+        return res.status(400).json({ error: "advisorId must be a course instructor or on project assignedAdvisorIds" });
       }
     } else {
       const role = await getUserRoleById(db, advisorId);
-      if (role !== "instructor" && role !== "advisor") {
-        return res.status(400).json({ error: "advisorId must be a valid instructor/advisor user" });
+      if (role !== "instructor") {
+        return res.status(400).json({ error: "advisorId must be a valid instructor user" });
       }
     }
 

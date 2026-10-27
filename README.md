@@ -80,10 +80,10 @@ Copy .env.example to .env and fill in the necessary firebase information, and mo
 yarn 
 npm run build
 
-pm2 start npm --name pgortrack-frontend -- run preview
+pm2 start npm --name progtrack-frontend -- run preview
 
 cd backend
 npm i 
 npm run build
 
-pm2 start npm --name pgortrack-backend -- start
+pm2 start npm --name progtrack-backend -- start

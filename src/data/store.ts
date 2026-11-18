@@ -58,26 +58,70 @@ interface AppState {
   assignInstructor: (courseId: string, instructorId: string) => Promise<void>;
   removeInstructor: (courseId: string, instructorId: string) => Promise<void>;
   addStudentToCourse: (courseId: string, studentId: string) => Promise<void>;
-  removeStudentFromCourse: (courseId: string, studentId: string) => Promise<void>;
+  removeStudentFromCourse: (
+    courseId: string,
+    studentId: string,
+  ) => Promise<void>;
   addProject: (p: Omit<Project, "id" | "progress">) => Promise<void>;
-  assignStudentToProject: (projectId: string, studentId: string) => Promise<void>;
-  removeStudentFromProject: (projectId: string, studentId: string) => Promise<void>;
-  updateProjectAdvisors: (projectId: string, advisorId: string, op: "add" | "remove") => Promise<void>;
+  assignStudentToProject: (
+    projectId: string,
+    studentId: string,
+  ) => Promise<void>;
+  removeStudentFromProject: (
+    projectId: string,
+    studentId: string,
+  ) => Promise<void>;
+  updateProjectAdvisors: (
+    projectId: string,
+    advisorId: string,
+    op: "add" | "remove",
+  ) => Promise<void>;
 
   // updates
-  submitUpdate: (u: Omit<WeeklyUpdate, "id" | "submittedAt" | "status" | "comments">) => void;
-  resubmitUpdate: (updateId: string, patch: Partial<Pick<WeeklyUpdate, "thisWeekGoals" | "nextWeekGoals" | "blockers" | "progress" | "links">>) => void;
+  submitUpdate: (
+    u: Omit<WeeklyUpdate, "id" | "submittedAt" | "status" | "comments">,
+  ) => void;
+  resubmitUpdate: (
+    updateId: string,
+    patch: Partial<
+      Pick<
+        WeeklyUpdate,
+        | "thisWeekGoals"
+        | "nextWeekGoals"
+        | "blockers"
+        | "linkPitchDeck"
+        | "progress"
+        | "links"
+      >
+    >,
+  ) => void;
   reviewerEditUpdate: (
     updateId: string,
-    patch: Partial<Pick<WeeklyUpdate, "thisWeekGoals" | "nextWeekGoals" | "blockers" | "progress" | "links">>,
+    patch: Partial<
+      Pick<
+        WeeklyUpdate,
+        | "thisWeekGoals"
+        | "nextWeekGoals"
+        | "blockers"
+        | "linkPitchDeck"
+        | "progress"
+        | "links"
+      >
+    >,
   ) => void;
   setApproval: (updateId: string, status: ApprovalStatus) => void;
   addComment: (updateId: string, authorId: string, text: string) => void;
   setProjectProgress: (projectId: string, progress: number) => void;
 
   // purchasing (separate from weekly updates)
-  submitPurchaseRequest: (p: Omit<PurchaseRequest, "id" | "createdAt" | "status">) => void;
-  reviewPurchaseRequest: (id: string, status: PurchaseRequestStatus, reviewNote?: string) => void;
+  submitPurchaseRequest: (
+    p: Omit<PurchaseRequest, "id" | "createdAt" | "status">,
+  ) => void;
+  reviewPurchaseRequest: (
+    id: string,
+    status: PurchaseRequestStatus,
+    reviewNote?: string,
+  ) => void;
 
   // meetings
   createMeeting: (
@@ -86,11 +130,27 @@ interface AppState {
     inheritFromLatest: boolean,
     options?: { proposedAt?: string | null },
   ) => Promise<string>;
-  updateMeetingAgenda: (meetingId: string, agendaItems: MeetingItem[]) => Promise<void>;
-  updateMeetingActionItems: (meetingId: string, actionItems: MeetingItem[]) => Promise<void>;
-  updateMeetingProposedAt: (meetingId: string, proposedAt: string | null) => Promise<void>;
-  setMeetingStatus: (meetingId: string, status: "draft" | "held") => Promise<void>;
-  addMeetingComment: (meetingId: string, authorId: string, text: string) => void;
+  updateMeetingAgenda: (
+    meetingId: string,
+    agendaItems: MeetingItem[],
+  ) => Promise<void>;
+  updateMeetingActionItems: (
+    meetingId: string,
+    actionItems: MeetingItem[],
+  ) => Promise<void>;
+  updateMeetingProposedAt: (
+    meetingId: string,
+    proposedAt: string | null,
+  ) => Promise<void>;
+  setMeetingStatus: (
+    meetingId: string,
+    status: "draft" | "held",
+  ) => Promise<void>;
+  addMeetingComment: (
+    meetingId: string,
+    authorId: string,
+    text: string,
+  ) => void;
 }
 
 const palette = [
@@ -102,9 +162,12 @@ const palette = [
   "0 70% 48%",
 ];
 
-const backendUrlRaw = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
+const backendUrlRaw =
+  (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim() || "";
 const backendUrl =
-  backendUrlRaw === "." || backendUrlRaw === "/" ? window.location.origin : backendUrlRaw;
+  backendUrlRaw === "." || backendUrlRaw === "/"
+    ? window.location.origin
+    : backendUrlRaw;
 
 export const useApp = create<AppState>()((set, get) => {
   let unsubAuth: Unsubscribe | null = null;
@@ -128,10 +191,26 @@ export const useApp = create<AppState>()((set, get) => {
     const cnt = await getCountFromServer(usersCol);
     if (cnt.data().count > 0) return;
 
-    await Promise.all(seedUsers.map((u) => setDoc(doc(firestore, "users", u.id), u, { merge: true })));
-    await Promise.all(seedCourses.map((c) => setDoc(doc(firestore, "courses", c.id), c, { merge: true })));
-    await Promise.all(seedProjects.map((p) => setDoc(doc(firestore, "projects", p.id), p, { merge: true })));
-    await Promise.all(seedUpdates.map((w) => setDoc(doc(firestore, "updates", w.id), w, { merge: true })));
+    await Promise.all(
+      seedUsers.map((u) =>
+        setDoc(doc(firestore, "users", u.id), u, { merge: true }),
+      ),
+    );
+    await Promise.all(
+      seedCourses.map((c) =>
+        setDoc(doc(firestore, "courses", c.id), c, { merge: true }),
+      ),
+    );
+    await Promise.all(
+      seedProjects.map((p) =>
+        setDoc(doc(firestore, "projects", p.id), p, { merge: true }),
+      ),
+    );
+    await Promise.all(
+      seedUpdates.map((w) =>
+        setDoc(doc(firestore, "updates", w.id), w, { merge: true }),
+      ),
+    );
   };
 
   const startListeners = () => {
@@ -144,8 +223,11 @@ export const useApp = create<AppState>()((set, get) => {
         set({ users, usersReady: true });
         const email = firebaseAuth.currentUser?.email;
         if (email) {
-          const u = users.find((x) => x.email.toLowerCase() === email.toLowerCase());
-          if (u?.id !== get().currentUserId) set({ currentUserId: u?.id ?? null });
+          const u = users.find(
+            (x) => x.email.toLowerCase() === email.toLowerCase(),
+          );
+          if (u?.id !== get().currentUserId)
+            set({ currentUserId: u?.id ?? null });
         }
       }),
     );
@@ -166,7 +248,9 @@ export const useApp = create<AppState>()((set, get) => {
     );
     unsubs.push(
       onSnapshot(collection(firestore, "purchaseRequests"), (snap) => {
-        set({ purchaseRequests: snap.docs.map((d) => d.data() as PurchaseRequest) });
+        set({
+          purchaseRequests: snap.docs.map((d) => d.data() as PurchaseRequest),
+        });
       }),
     );
     unsubs.push(
@@ -219,7 +303,9 @@ export const useApp = create<AppState>()((set, get) => {
             startListeners();
           });
 
-        const u = get().users.find((x) => x.email.toLowerCase() === fbUser.email!.toLowerCase());
+        const u = get().users.find(
+          (x) => x.email.toLowerCase() === fbUser.email!.toLowerCase(),
+        );
         set({ currentUserId: u?.id ?? null });
       });
     },
@@ -251,7 +337,9 @@ export const useApp = create<AppState>()((set, get) => {
           } catch {
             // ignore
           }
-          throw new Error(`Backend user create failed (${res.status})${detail}`);
+          throw new Error(
+            `Backend user create failed (${res.status})${detail}`,
+          );
         }
         return;
       }
@@ -267,7 +355,11 @@ export const useApp = create<AppState>()((set, get) => {
       }
       const id = uid("u");
       const avatarColor = palette[get().users.length % palette.length];
-      await setDoc(doc(firestore, "users", id), { ...u, id, avatarColor } satisfies User);
+      await setDoc(doc(firestore, "users", id), {
+        ...u,
+        id,
+        avatarColor,
+      } satisfies User);
     },
     updateUserRole: async (id, role) => {
       const fbUser = firebaseAuth.currentUser;
@@ -290,7 +382,9 @@ export const useApp = create<AppState>()((set, get) => {
           } catch {
             // ignore
           }
-          throw new Error(`Backend user role update failed (${res.status})${detail}`);
+          throw new Error(
+            `Backend user role update failed (${res.status})${detail}`,
+          );
         }
         return;
       }
@@ -316,7 +410,9 @@ export const useApp = create<AppState>()((set, get) => {
           } catch {
             // ignore
           }
-          throw new Error(`Backend user delete failed (${res.status})${detail}`);
+          throw new Error(
+            `Backend user delete failed (${res.status})${detail}`,
+          );
         }
         return;
       }
@@ -345,13 +441,18 @@ export const useApp = create<AppState>()((set, get) => {
           } catch {
             // ignore
           }
-          throw new Error(`Backend course create failed (${res.status})${detail}`);
+          throw new Error(
+            `Backend course create failed (${res.status})${detail}`,
+          );
         }
         return;
       }
 
       const id = uid("c");
-      await setDoc(doc(firestore, "courses", id), { ...c, id } satisfies Course);
+      await setDoc(doc(firestore, "courses", id), {
+        ...c,
+        id,
+      } satisfies Course);
     },
     assignInstructor: async (courseId, instructorId) => {
       const course = get().courses.find((c) => c.id === courseId);
@@ -368,7 +469,8 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ instructorId, op: "add" }),
         });
-        if (!res.ok) throw new Error(`Backend assign instructor failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(`Backend assign instructor failed (${res.status})`);
         return;
       }
 
@@ -391,7 +493,8 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ instructorId, op: "remove" }),
         });
-        if (!res.ok) throw new Error(`Backend remove instructor failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(`Backend remove instructor failed (${res.status})`);
         return;
       }
 
@@ -417,7 +520,10 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ studentId, op: "add" }),
         });
-        if (!res.ok) throw new Error(`Backend add student to course failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(
+            `Backend add student to course failed (${res.status})`,
+          );
         return;
       }
 
@@ -443,7 +549,10 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ studentId, op: "remove" }),
         });
-        if (!res.ok) throw new Error(`Backend remove student from course failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(
+            `Backend remove student from course failed (${res.status})`,
+          );
         return;
       }
 
@@ -469,12 +578,17 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify(p),
         });
-        if (!res.ok) throw new Error(`Backend project create failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(`Backend project create failed (${res.status})`);
         return;
       }
 
       const id = uid("p");
-      await setDoc(doc(firestore, "projects", id), { ...p, id, progress: 0 } satisfies Project);
+      await setDoc(doc(firestore, "projects", id), {
+        ...p,
+        id,
+        progress: 0,
+      } satisfies Project);
     },
     assignStudentToProject: async (projectId, studentId) => {
       const project = get().projects.find((p) => p.id === projectId);
@@ -495,7 +609,8 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ studentId, op: "add" }),
         });
-        if (!res.ok) throw new Error(`Backend assign student failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(`Backend assign student failed (${res.status})`);
         return;
       }
 
@@ -529,7 +644,8 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ studentId, op: "remove" }),
         });
-        if (!res.ok) throw new Error(`Backend remove student failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(`Backend remove student failed (${res.status})`);
         return;
       }
 
@@ -553,14 +669,21 @@ export const useApp = create<AppState>()((set, get) => {
           },
           body: JSON.stringify({ advisorId, op }),
         });
-        if (!res.ok) throw new Error(`Backend update project advisors failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(
+            `Backend update project advisors failed (${res.status})`,
+          );
         return;
       }
 
       const existing = (project.assignedAdvisorIds ?? []) as string[];
       const next =
-        op === "add" ? Array.from(new Set([...existing, advisorId])) : existing.filter((x) => x !== advisorId);
-      await updateDoc(doc(firestore, "projects", projectId), { assignedAdvisorIds: next });
+        op === "add"
+          ? Array.from(new Set([...existing, advisorId]))
+          : existing.filter((x) => x !== advisorId);
+      await updateDoc(doc(firestore, "projects", projectId), {
+        assignedAdvisorIds: next,
+      });
     },
 
     // updates
@@ -597,7 +720,11 @@ export const useApp = create<AppState>()((set, get) => {
         achieved: g.achieved ?? null,
         ...(g.reason?.trim() ? { reason: g.reason } : {}),
       }));
-      const links = (u.links ?? []).map((l) => ({ id: l.id, label: l.label, url: l.url }));
+      const links = (u.links ?? []).map((l) => ({
+        id: l.id,
+        label: l.label,
+        url: l.url,
+      }));
 
       const payload: WeeklyUpdate = {
         ...u,
@@ -609,7 +736,13 @@ export const useApp = create<AppState>()((set, get) => {
             type: "submitted",
             at: new Date().toISOString(),
             byUserId: u.authorId,
-            fields: ["thisWeekGoals", "nextWeekGoals", "blockers", "progress", "links"],
+            fields: [
+              "thisWeekGoals",
+              "nextWeekGoals",
+              "blockers",
+              "progress",
+              "links",
+            ],
           },
         ],
         blockers: (u.blockers ?? "").toString(),
@@ -623,7 +756,9 @@ export const useApp = create<AppState>()((set, get) => {
       };
       void setDoc(doc(firestore, "updates", id), payload);
       // Projects are write-protected in production (admin SDK only). Progress is derived from updates.
-      void updateDoc(doc(firestore, "projects", u.projectId), { progress: u.progress }).catch(() => {
+      void updateDoc(doc(firestore, "projects", u.projectId), {
+        progress: u.progress,
+      }).catch(() => {
         // ignore
       });
     },
@@ -639,7 +774,8 @@ export const useApp = create<AppState>()((set, get) => {
             },
             body: JSON.stringify(patch),
           });
-          if (!res.ok) throw new Error(`Resubmit update failed (${res.status})`);
+          if (!res.ok)
+            throw new Error(`Resubmit update failed (${res.status})`);
         })().catch(() => {});
         return;
       }
@@ -665,17 +801,26 @@ export const useApp = create<AppState>()((set, get) => {
         achieved: g.achieved ?? null,
         ...(g.reason?.trim() ? { reason: g.reason } : {}),
       }));
-      const links = (patch.links ?? []).map((l) => ({ id: l.id, label: l.label, url: l.url }));
+      const links = (patch.links ?? []).map((l) => ({
+        id: l.id,
+        label: l.label,
+        url: l.url,
+      }));
 
       void updateDoc(doc(firestore, "updates", updateId), {
         ...(patch.thisWeekGoals ? { thisWeekGoals } : {}),
         ...(patch.nextWeekGoals ? { nextWeekGoals } : {}),
         ...(patch.links ? { links } : {}),
-        ...(patch.blockers !== undefined ? { blockers: (patch.blockers ?? "").toString() } : {}),
-        ...(patch.progress !== undefined ? { progress: Number.isFinite(patch.progress) ? patch.progress : 0 } : {}),
+        ...(patch.blockers !== undefined
+          ? { blockers: (patch.blockers ?? "").toString() }
+          : {}),
+        ...(patch.progress !== undefined
+          ? { progress: Number.isFinite(patch.progress) ? patch.progress : 0 }
+          : {}),
         status: "pending",
         submittedAt: at,
-        revision: (get().updates.find((u) => u.id === updateId)?.revision ?? 1) + 1,
+        revision:
+          (get().updates.find((u) => u.id === updateId)?.revision ?? 1) + 1,
       });
 
       logUpdateEvent(updateId, {
@@ -698,7 +843,8 @@ export const useApp = create<AppState>()((set, get) => {
             },
             body: JSON.stringify(patch),
           });
-          if (!res.ok) throw new Error(`Reviewer edit update failed (${res.status})`);
+          if (!res.ok)
+            throw new Error(`Reviewer edit update failed (${res.status})`);
         })().catch(() => {});
         return;
       }
@@ -709,8 +855,16 @@ export const useApp = create<AppState>()((set, get) => {
         ...(patch.thisWeekGoals ? { thisWeekGoals: patch.thisWeekGoals } : {}),
         ...(patch.nextWeekGoals ? { nextWeekGoals: patch.nextWeekGoals } : {}),
         ...(patch.links ? { links: patch.links } : {}),
-        ...(patch.blockers !== undefined ? { blockers: (patch.blockers ?? "").toString() } : {}),
-        ...(patch.progress !== undefined ? { progress: Number.isFinite(Number(patch.progress)) ? Number(patch.progress) : 0 } : {}),
+        ...(patch.blockers !== undefined
+          ? { blockers: (patch.blockers ?? "").toString() }
+          : {}),
+        ...(patch.progress !== undefined
+          ? {
+              progress: Number.isFinite(Number(patch.progress))
+                ? Number(patch.progress)
+                : 0,
+            }
+          : {}),
         lastEditedAt: at,
         lastEditedBy: editorId,
       });
@@ -810,7 +964,8 @@ export const useApp = create<AppState>()((set, get) => {
             },
             body: JSON.stringify(p),
           });
-          if (!res.ok) throw new Error(`Submit purchase request failed (${res.status})`);
+          if (!res.ok)
+            throw new Error(`Submit purchase request failed (${res.status})`);
         })().catch(() => {});
         return;
       }
@@ -850,7 +1005,8 @@ export const useApp = create<AppState>()((set, get) => {
             },
             body: JSON.stringify({ status, reviewNote }),
           });
-          if (!res.ok) throw new Error(`Review purchase request failed (${res.status})`);
+          if (!res.ok)
+            throw new Error(`Review purchase request failed (${res.status})`);
         })().catch(() => {});
         return;
       }
@@ -859,7 +1015,9 @@ export const useApp = create<AppState>()((set, get) => {
         status,
         reviewerId: reviewerId ?? null,
         reviewedAt: new Date().toISOString(),
-        ...(reviewNote?.trim() ? { reviewNote: reviewNote.trim() } : { reviewNote: null }),
+        ...(reviewNote?.trim()
+          ? { reviewNote: reviewNote.trim() }
+          : { reviewNote: null }),
       });
     },
 
@@ -881,7 +1039,9 @@ export const useApp = create<AppState>()((set, get) => {
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`Create meeting failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+        throw new Error(
+          `Create meeting failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`,
+        );
       }
       const json = (await res.json()) as { id?: string };
       if (!json.id) throw new Error("Create meeting failed (missing id)");
@@ -901,7 +1061,9 @@ export const useApp = create<AppState>()((set, get) => {
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`Update agenda failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+        throw new Error(
+          `Update agenda failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`,
+        );
       }
     },
 
@@ -918,7 +1080,9 @@ export const useApp = create<AppState>()((set, get) => {
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`Update action items failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+        throw new Error(
+          `Update action items failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`,
+        );
       }
     },
 
@@ -935,7 +1099,9 @@ export const useApp = create<AppState>()((set, get) => {
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`Update meeting details failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+        throw new Error(
+          `Update meeting details failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`,
+        );
       }
     },
 
@@ -952,7 +1118,9 @@ export const useApp = create<AppState>()((set, get) => {
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`Update meeting status failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`);
+        throw new Error(
+          `Update meeting status failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`,
+        );
       }
     },
 
@@ -972,7 +1140,8 @@ export const useApp = create<AppState>()((set, get) => {
             },
             body: JSON.stringify({ text }),
           });
-          if (!res.ok) throw new Error(`Add meeting comment failed (${res.status})`);
+          if (!res.ok)
+            throw new Error(`Add meeting comment failed (${res.status})`);
         })().catch(() => {});
         return;
       }
@@ -980,14 +1149,22 @@ export const useApp = create<AppState>()((set, get) => {
       const commentId = uid("mc");
       const comments: MeetingComment[] = [
         ...(meeting.comments ?? []),
-        { id: commentId, authorId, text: text.trim(), createdAt: new Date().toISOString() },
+        {
+          id: commentId,
+          authorId,
+          text: text.trim(),
+          createdAt: new Date().toISOString(),
+        },
       ];
       void updateDoc(doc(firestore, "meetings", meetingId), { comments });
     },
   };
 });
 
-export const newGoal = (text = "", achieved: boolean | null = null): WeeklyGoal => ({
+export const newGoal = (
+  text = "",
+  achieved: boolean | null = null,
+): WeeklyGoal => ({
   id: uid("g"),
   text,
   achieved,

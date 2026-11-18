@@ -8,17 +8,41 @@ import { Avatar } from "@/components/Avatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { WeeklyUpdateCard } from "@/components/WeeklyUpdateCard";
 import { SubmitUpdateForm } from "@/components/SubmitUpdateForm";
-import { LayoutDashboard, ChevronRight, ArrowLeft, Users as UsersIcon, Plus } from "lucide-react";
+import {
+  LayoutDashboard,
+  ChevronRight,
+  ArrowLeft,
+  Users as UsersIcon,
+  Plus,
+} from "lucide-react";
 import { differenceInDays } from "date-fns";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import type { AdvisorThreadId, Meeting, MeetingItem } from "@/data/types";
-import { datetimeLocalValueToIso, formatMeetingOptionLabel, formatMeetingProposed, isoToDatetimeLocalValue } from "@/lib/meetingTime";
+import {
+  datetimeLocalValueToIso,
+  formatMeetingOptionLabel,
+  formatMeetingProposed,
+  isoToDatetimeLocalValue,
+} from "@/lib/meetingTime";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -57,10 +81,14 @@ const StudentDashboard = () => {
   const updateMeetingProposedAt = useApp((s) => s.updateMeetingProposedAt);
   const addMeetingComment = useApp((s) => s.addMeetingComment);
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  );
   const [composing, setComposing] = useState(false);
   const [advisorId, setAdvisorId] = useState<AdvisorThreadId>("");
-  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(
+    null,
+  );
   const [agendaDraft, setAgendaDraft] = useState<MeetingItem[]>([]);
   const [actionsDraft, setActionsDraft] = useState<MeetingItem[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
@@ -71,13 +99,29 @@ const StudentDashboard = () => {
   const [prCost, setPrCost] = useState(0);
   const [prLink, setPrLink] = useState("");
   const [prWhy, setPrWhy] = useState("");
-  const money = new Intl.NumberFormat("en-HK", { style: "currency", currency: "HKD" });
+  const money = new Intl.NumberFormat("en-HK", {
+    style: "currency",
+    currency: "HKD",
+  });
 
-  const nav = [{ to: "/student", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
+  const nav = [
+    {
+      to: "/student",
+      label: "Overview",
+      icon: <LayoutDashboard className="h-4 w-4" />,
+    },
+  ];
   const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
 
-  const selectedProject = selectedProjectId ? projects.find((p) => p.id === selectedProjectId) : null;
-  const selectedCourse = selectedProject ? courses.find((c) => c.id === selectedProject.courseId) : null;
+  // Get all meetings of all projects 
+
+
+  const selectedProject = selectedProjectId
+    ? projects.find((p) => p.id === selectedProjectId)
+    : null;
+  const selectedCourse = selectedProject
+    ? courses.find((c) => c.id === selectedProject.courseId)
+    : null;
   const advisors = useMemo(() => {
     const ids = [
       ...((selectedCourse?.instructorIds ?? []) as string[]),
@@ -87,16 +131,25 @@ const StudentDashboard = () => {
     return uniq
       .map((id) => users.find((u) => u.id === id))
       .filter((u): u is NonNullable<typeof u> => !!u);
-  }, [selectedCourse?.instructorIds?.join("|"), selectedProject?.assignedAdvisorIds?.join("|"), users]);
+  }, [
+    selectedCourse?.instructorIds?.join("|"),
+    selectedProject?.assignedAdvisorIds?.join("|"),
+    users,
+  ]);
 
   const projectMeetings = useMemo(() => {
     if (!selectedProject) return [];
     return meetings
-      .filter((m) => m.projectId === selectedProject.id && (m.advisorId || "") === advisorId)
+      .filter(
+        (m) =>
+          m.projectId === selectedProject.id &&
+          (m.advisorId || "") === advisorId,
+      )
       .sort((a, b) => (a.sequence < b.sequence ? 1 : -1));
   }, [meetings, selectedProject?.id, advisorId]);
   const selectedMeeting: Meeting | undefined =
-    projectMeetings.find((m) => m.id === selectedMeetingId) ?? projectMeetings[0];
+    projectMeetings.find((m) => m.id === selectedMeetingId) ??
+    projectMeetings[0];
   const meetingLocked = useMemo(() => {
     if (!selectedMeeting) return false;
     const newest = projectMeetings[0];
@@ -117,17 +170,33 @@ const StudentDashboard = () => {
       ...(((selectedProject?.assignedAdvisorIds ?? []) as string[]) ?? []),
     ];
     const uniq = Array.from(new Set(ids)).filter(Boolean);
-    setAdvisorId((prev) => (prev && uniq.includes(prev) ? prev : uniq[0] ?? ""));
-  }, [selectedCourse?.id, selectedCourse?.instructorIds?.join("|"), selectedProject?.assignedAdvisorIds?.join("|")]);
+    setAdvisorId((prev) =>
+      prev && uniq.includes(prev) ? prev : (uniq[0] ?? ""),
+    );
+  }, [
+    selectedCourse?.id,
+    selectedCourse?.instructorIds?.join("|"),
+    selectedProject?.assignedAdvisorIds?.join("|"),
+  ]);
 
   useEffect(() => {
-    setProposedLocalDraft(isoToDatetimeLocalValue(selectedMeeting?.proposedAt ?? null));
+    setProposedLocalDraft(
+      isoToDatetimeLocalValue(selectedMeeting?.proposedAt ?? null),
+    );
   }, [selectedMeeting?.id, selectedMeeting?.proposedAt]);
 
   useEffect(() => {
     if (!selectedProject) return;
-    setAgendaDraft(selectedMeeting?.agendaItems?.length ? selectedMeeting.agendaItems : [newMeetingItem("", user.id)]);
-    setActionsDraft(selectedMeeting?.actionItems?.length ? selectedMeeting.actionItems : [newMeetingItem("", user.id)]);
+    setAgendaDraft(
+      selectedMeeting?.agendaItems?.length
+        ? selectedMeeting.agendaItems
+        : [newMeetingItem("", user.id)],
+    );
+    setActionsDraft(
+      selectedMeeting?.actionItems?.length
+        ? selectedMeeting.actionItems
+        : [newMeetingItem("", user.id)],
+    );
     setCommentDraft("");
   }, [selectedProject?.id, selectedMeeting?.id, meetings, user.id]);
 
@@ -142,44 +211,69 @@ const StudentDashboard = () => {
     const projectPRs = purchaseRequests
       .filter((r) => r.projectId === project.id)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    const daysSince = lastUpdate ? differenceInDays(new Date(), new Date(lastUpdate.submittedAt)) : null;
+    const daysSince = lastUpdate
+      ? differenceInDays(new Date(), new Date(lastUpdate.submittedAt))
+      : null;
 
     return (
       <AppShell roleLabel="Student" nav={nav}>
         <div className="container mx-auto max-w-5xl px-6 py-8">
-          <Button variant="ghost" size="sm" className="mb-4" onClick={() => { setSelectedProjectId(null); setComposing(false); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mb-4"
+            onClick={() => {
+              setSelectedProjectId(null);
+              setComposing(false);
+            }}
+          >
             <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to my projects
           </Button>
           <div className="mb-2 flex items-center gap-2">
             <Badge variant="secondary">{course?.code}</Badge>
-            <span className="text-xs text-muted-foreground">{course?.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {course?.name}
+            </span>
           </div>
-          <h1 className="font-serif text-3xl font-semibold text-foreground">{project.name}</h1>
+          <h1 className="font-serif text-3xl font-semibold text-foreground">
+            {project.name}
+          </h1>
           <p className="mt-1 text-muted-foreground">{project.description}</p>
 
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <UsersIcon className="h-4 w-4 text-muted-foreground" />
               <div className="flex -space-x-2">
-                {project.studentIds.map((sid) => <Avatar key={sid} userId={sid} size={28} />)}
+                {project.studentIds.map((sid) => (
+                  <Avatar key={sid} userId={sid} size={28} />
+                ))}
               </div>
               <span className="text-sm text-muted-foreground">
-                {project.studentIds.map((sid) => users.find((u) => u.id === sid)?.name).join(", ")}
+                {project.studentIds
+                  .map((sid) => users.find((u) => u.id === sid)?.name)
+                  .join(", ")}
               </span>
             </div>
             <div className="ml-auto flex items-center gap-3 text-sm">
               <span className="text-muted-foreground">Progress</span>
               <div className="h-2 w-32 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full bg-gradient-hero" style={{ width: `${progressNow}%` }} />
+                <div
+                  className="h-full bg-gradient-hero"
+                  style={{ width: `${progressNow}%` }}
+                />
               </div>
-              <span className="font-serif font-semibold text-primary">{progressNow}%</span>
+              <span className="font-serif font-semibold text-primary">
+                {progressNow}%
+              </span>
             </div>
           </div>
 
           {!composing && (
             <Card className="academic-card mt-6 flex items-center justify-between bg-gradient-hero p-5 text-primary-foreground">
               <div>
-                <h3 className="font-serif text-lg font-semibold">Time for this week's update</h3>
+                <h3 className="font-serif text-lg font-semibold">
+                  Time for this week's update
+                </h3>
                 <p className="text-sm text-primary-foreground/80">
                   {lastUpdate
                     ? `Last update was ${daysSince} day${daysSince === 1 ? "" : "s"} ago.`
@@ -194,7 +288,10 @@ const StudentDashboard = () => {
 
           {composing && (
             <div className="mt-6">
-              <SubmitUpdateForm project={project} onSubmitted={() => setComposing(false)} />
+              <SubmitUpdateForm
+                project={project}
+                onSubmitted={() => setComposing(false)}
+              />
             </div>
           )}
 
@@ -203,11 +300,17 @@ const StudentDashboard = () => {
               Weekly history ({projectUpdates.length})
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Browse previous weeks to track continuity and see instructor feedback.
+              Browse previous weeks to track continuity and see instructor
+              feedback.
             </p>
             <div className="space-y-3">
               {projectUpdates.map((u, idx) => (
-                <WeeklyUpdateCard key={u.id} update={u} viewer="student" defaultOpen={idx === 0} />
+                <WeeklyUpdateCard
+                  key={u.id}
+                  update={u}
+                  viewer="student"
+                  defaultOpen={idx === 0}
+                />
               ))}
               {projectUpdates.length === 0 && (
                 <Card className="academic-card p-8 text-center text-sm text-muted-foreground">
@@ -220,18 +323,30 @@ const StudentDashboard = () => {
           <div className="mt-10">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-serif text-xl font-semibold text-foreground">Meetings</h2>
+                <h2 className="font-serif text-xl font-semibold text-foreground">
+                  Meetings
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  Create agendas and action items. New meeting agendas can inherit last meeting action items.
+                  Create agendas and action items. New meeting agendas can
+                  inherit last meeting action items.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="space-y-1.5 sm:min-w-[220px]">
-                  <Label htmlFor="student-meeting-advisor" className="text-xs text-muted-foreground">
+                  <Label
+                    htmlFor="student-meeting-advisor"
+                    className="text-xs text-muted-foreground"
+                  >
                     Meeting thread
                   </Label>
-                  <Select value={advisorId || undefined} onValueChange={(v) => setAdvisorId(v)}>
-                    <SelectTrigger id="student-meeting-advisor" className="h-9 w-full border-border bg-background sm:w-[260px]">
+                  <Select
+                    value={advisorId || undefined}
+                    onValueChange={(v) => setAdvisorId(v)}
+                  >
+                    <SelectTrigger
+                      id="student-meeting-advisor"
+                      className="h-9 w-full border-border bg-background sm:w-[260px]"
+                    >
                       <SelectValue placeholder="Choose meeting lead" />
                     </SelectTrigger>
                     <SelectContent>
@@ -244,7 +359,10 @@ const StudentDashboard = () => {
                   </Select>
                 </div>
                 <div className="space-y-1.5 sm:min-w-[200px]">
-                  <Label htmlFor="student-new-meeting-proposed" className="text-xs text-muted-foreground">
+                  <Label
+                    htmlFor="student-new-meeting-proposed"
+                    className="text-xs text-muted-foreground"
+                  >
                     Proposed time for new meetings (optional)
                   </Label>
                   <Input
@@ -259,14 +377,21 @@ const StudentDashboard = () => {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      if (!advisorId) throw new Error("No instructor found for this course.");
+                      if (!advisorId)
+                        throw new Error("No instructor found for this course.");
                       const iso = datetimeLocalValueToIso(createProposedLocal);
-                      const id = await createMeeting(project.id, advisorId, false, iso ? { proposedAt: iso } : undefined);
+                      const id = await createMeeting(
+                        project.id,
+                        advisorId,
+                        false,
+                        iso ? { proposedAt: iso } : undefined,
+                      );
                       setCreateProposedLocal("");
                       toast.success("Meeting created.");
                       setSelectedMeetingId(id);
                     } catch (e) {
-                      const msg = e instanceof Error ? e.message : "Unknown error";
+                      const msg =
+                        e instanceof Error ? e.message : "Unknown error";
                       toast.error(`Could not create meeting: ${msg}`);
                     }
                   }}
@@ -276,14 +401,21 @@ const StudentDashboard = () => {
                 <Button
                   onClick={async () => {
                     try {
-                      if (!advisorId) throw new Error("No instructor found for this course.");
+                      if (!advisorId)
+                        throw new Error("No instructor found for this course.");
                       const iso = datetimeLocalValueToIso(createProposedLocal);
-                      const id = await createMeeting(project.id, advisorId, true, iso ? { proposedAt: iso } : undefined);
+                      const id = await createMeeting(
+                        project.id,
+                        advisorId,
+                        true,
+                        iso ? { proposedAt: iso } : undefined,
+                      );
                       setCreateProposedLocal("");
                       toast.success("Meeting created (inherited).");
                       setSelectedMeetingId(id);
                     } catch (e) {
-                      const msg = e instanceof Error ? e.message : "Unknown error";
+                      const msg =
+                        e instanceof Error ? e.message : "Unknown error";
                       toast.error(`Could not create meeting: ${msg}`);
                     }
                   }}
@@ -297,17 +429,26 @@ const StudentDashboard = () => {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-foreground">
-                    {selectedMeeting ? `Meeting #${selectedMeeting.sequence}` : "No meetings yet"}
+                    {selectedMeeting
+                      ? `Meeting #${selectedMeeting.sequence}`
+                      : "No meetings yet"}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {selectedMeeting ? `Created ${new Date(selectedMeeting.createdAt).toLocaleString()}` : "Create your first meeting above."}
+                    {selectedMeeting
+                      ? `Created ${new Date(selectedMeeting.createdAt).toLocaleString()}`
+                      : "Create your first meeting above."}
                   </div>
                   {selectedMeeting ? (
                     <div className="mt-1 text-xs text-foreground">
                       {selectedMeeting.proposedAt ? (
-                        <>Proposed: {formatMeetingProposed(selectedMeeting.proposedAt)}</>
+                        <>
+                          Proposed:{" "}
+                          {formatMeetingProposed(selectedMeeting.proposedAt)}
+                        </>
                       ) : (
-                        <span className="text-muted-foreground">No proposed date yet — set it below.</span>
+                        <span className="text-muted-foreground">
+                          No proposed date yet — set it below.
+                        </span>
                       )}
                     </div>
                   ) : null}
@@ -332,15 +473,22 @@ const StudentDashboard = () => {
                       size="sm"
                       onClick={async () => {
                         try {
-                          await setMeetingStatus(selectedMeeting.id, selectedMeeting.status === "held" ? "draft" : "held");
+                          await setMeetingStatus(
+                            selectedMeeting.id,
+                            selectedMeeting.status === "held"
+                              ? "draft"
+                              : "held",
+                          );
                           toast.success("Meeting status updated.");
                         } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          const msg =
+                            e instanceof Error ? e.message : "Unknown error";
                           toast.error(`Could not update status: ${msg}`);
                         }
                       }}
                     >
-                      Mark as {selectedMeeting?.status === "held" ? "draft" : "held"}
+                      Mark as{" "}
+                      {selectedMeeting?.status === "held" ? "draft" : "held"}
                     </Button>
                   ) : null}
                 </div>
@@ -349,7 +497,10 @@ const StudentDashboard = () => {
               {selectedMeeting ? (
                 <div className="mb-4 flex flex-col gap-2 rounded-md border border-border/70 bg-muted/25 p-3 sm:flex-row sm:flex-wrap sm:items-end">
                   <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
-                    <Label htmlFor="student-meeting-proposed" className="text-xs">
+                    <Label
+                      htmlFor="student-meeting-proposed"
+                      className="text-xs"
+                    >
                       Proposed meeting date & time
                     </Label>
                     <Input
@@ -366,10 +517,14 @@ const StudentDashboard = () => {
                       size="sm"
                       onClick={async () => {
                         try {
-                          await updateMeetingProposedAt(selectedMeeting.id, datetimeLocalValueToIso(proposedLocalDraft));
+                          await updateMeetingProposedAt(
+                            selectedMeeting.id,
+                            datetimeLocalValueToIso(proposedLocalDraft),
+                          );
                           toast.success("Proposed time saved.");
                         } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          const msg =
+                            e instanceof Error ? e.message : "Unknown error";
                           toast.error(`Could not save: ${msg}`);
                         }
                       }}
@@ -383,10 +538,14 @@ const StudentDashboard = () => {
                       onClick={async () => {
                         try {
                           setProposedLocalDraft("");
-                          await updateMeetingProposedAt(selectedMeeting.id, null);
+                          await updateMeetingProposedAt(
+                            selectedMeeting.id,
+                            null,
+                          );
                           toast.success("Proposed time cleared.");
                         } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          const msg =
+                            e instanceof Error ? e.message : "Unknown error";
                           toast.error(`Could not clear: ${msg}`);
                         }
                       }}
@@ -400,21 +559,32 @@ const StudentDashboard = () => {
               {selectedMeeting ? (
                 <div className="grid gap-6 lg:grid-cols-3">
                   <div>
-                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">Agenda</div>
+                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">
+                      Agenda
+                    </div>
                     {meetingLocked ? (
                       <div className="mb-2 text-xs text-muted-foreground">
-                        Locked: this meeting is held or a newer meeting exists in this instructor thread.
+                        Locked: this meeting is held or a newer meeting exists
+                        in this instructor thread.
                       </div>
                     ) : null}
                     <div className="space-y-2">
                       {agendaDraft.map((it, idx) => (
                         <div key={it.id} className="flex items-center gap-2">
-                          <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
+                          <span className="w-6 text-right text-sm text-muted-foreground">
+                            {idx + 1}.
+                          </span>
                           <Input
                             value={it.text}
                             disabled={meetingLocked}
                             onChange={(e) =>
-                              setAgendaDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
+                              setAgendaDraft((xs) =>
+                                xs.map((x) =>
+                                  x.id === it.id
+                                    ? { ...x, text: e.target.value }
+                                    : x,
+                                ),
+                              )
                             }
                             placeholder="Agenda item…"
                           />
@@ -423,7 +593,11 @@ const StudentDashboard = () => {
                             variant="ghost"
                             size="sm"
                             disabled={meetingLocked}
-                            onClick={() => setAgendaDraft((xs) => xs.filter((x) => x.id !== it.id))}
+                            onClick={() =>
+                              setAgendaDraft((xs) =>
+                                xs.filter((x) => x.id !== it.id),
+                              )
+                            }
                           >
                             ×
                           </Button>
@@ -435,7 +609,12 @@ const StudentDashboard = () => {
                           variant="outline"
                           size="sm"
                           disabled={meetingLocked}
-                          onClick={() => setAgendaDraft((xs) => [...xs, newMeetingItem("", user.id)])}
+                          onClick={() =>
+                            setAgendaDraft((xs) => [
+                              ...xs,
+                              newMeetingItem("", user.id),
+                            ])
+                          }
                         >
                           Add agenda item
                         </Button>
@@ -446,13 +625,21 @@ const StudentDashboard = () => {
                           onClick={async () => {
                             try {
                               if (meetingLocked) {
-                                toast.error("Meeting is locked. Edit the latest draft meeting in this thread.");
+                                toast.error(
+                                  "Meeting is locked. Edit the latest draft meeting in this thread.",
+                                );
                                 return;
                               }
-                              await updateMeetingAgenda(selectedMeeting.id, normalizeItems(agendaDraft, user.id));
+                              await updateMeetingAgenda(
+                                selectedMeeting.id,
+                                normalizeItems(agendaDraft, user.id),
+                              );
                               toast.success("Agenda saved.");
                             } catch (e) {
-                              const msg = e instanceof Error ? e.message : "Unknown error";
+                              const msg =
+                                e instanceof Error
+                                  ? e.message
+                                  : "Unknown error";
                               toast.error(`Could not save agenda: ${msg}`);
                             }
                           }}
@@ -464,21 +651,32 @@ const StudentDashboard = () => {
                   </div>
 
                   <div>
-                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">Action items</div>
+                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">
+                      Action items
+                    </div>
                     {meetingLocked ? (
                       <div className="mb-2 text-xs text-muted-foreground">
-                        Locked: this meeting is held or a newer meeting exists in this instructor thread.
+                        Locked: this meeting is held or a newer meeting exists
+                        in this instructor thread.
                       </div>
                     ) : null}
                     <div className="space-y-2">
                       {actionsDraft.map((it, idx) => (
                         <div key={it.id} className="flex items-center gap-2">
-                          <span className="w-6 text-right text-sm text-muted-foreground">{idx + 1}.</span>
+                          <span className="w-6 text-right text-sm text-muted-foreground">
+                            {idx + 1}.
+                          </span>
                           <Input
                             value={it.text}
                             disabled={meetingLocked}
                             onChange={(e) =>
-                              setActionsDraft((xs) => xs.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
+                              setActionsDraft((xs) =>
+                                xs.map((x) =>
+                                  x.id === it.id
+                                    ? { ...x, text: e.target.value }
+                                    : x,
+                                ),
+                              )
                             }
                             placeholder="Action item…"
                           />
@@ -487,7 +685,11 @@ const StudentDashboard = () => {
                             variant="ghost"
                             size="sm"
                             disabled={meetingLocked}
-                            onClick={() => setActionsDraft((xs) => xs.filter((x) => x.id !== it.id))}
+                            onClick={() =>
+                              setActionsDraft((xs) =>
+                                xs.filter((x) => x.id !== it.id),
+                              )
+                            }
                           >
                             ×
                           </Button>
@@ -499,7 +701,12 @@ const StudentDashboard = () => {
                           variant="outline"
                           size="sm"
                           disabled={meetingLocked}
-                          onClick={() => setActionsDraft((xs) => [...xs, newMeetingItem("", user.id)])}
+                          onClick={() =>
+                            setActionsDraft((xs) => [
+                              ...xs,
+                              newMeetingItem("", user.id),
+                            ])
+                          }
                         >
                           Add action item
                         </Button>
@@ -510,14 +717,24 @@ const StudentDashboard = () => {
                           onClick={async () => {
                             try {
                               if (meetingLocked) {
-                                toast.error("Meeting is locked. Edit the latest draft meeting in this thread.");
+                                toast.error(
+                                  "Meeting is locked. Edit the latest draft meeting in this thread.",
+                                );
                                 return;
                               }
-                              await updateMeetingActionItems(selectedMeeting.id, normalizeItems(actionsDraft, user.id));
+                              await updateMeetingActionItems(
+                                selectedMeeting.id,
+                                normalizeItems(actionsDraft, user.id),
+                              );
                               toast.success("Action items saved.");
                             } catch (e) {
-                              const msg = e instanceof Error ? e.message : "Unknown error";
-                              toast.error(`Could not save action items: ${msg}`);
+                              const msg =
+                                e instanceof Error
+                                  ? e.message
+                                  : "Unknown error";
+                              toast.error(
+                                `Could not save action items: ${msg}`,
+                              );
                             }
                           }}
                         >
@@ -528,7 +745,9 @@ const StudentDashboard = () => {
                   </div>
 
                   <div>
-                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">Comments</div>
+                    <div className="mb-2 font-serif text-lg font-semibold text-foreground">
+                      Comments
+                    </div>
                     <div className="space-y-3">
                       <div className="space-y-2">
                         <Textarea
@@ -544,7 +763,11 @@ const StudentDashboard = () => {
                             disabled={!commentDraft.trim()}
                             onClick={() => {
                               try {
-                                addMeetingComment(selectedMeeting.id, user.id, commentDraft);
+                                addMeetingComment(
+                                  selectedMeeting.id,
+                                  user.id,
+                                  commentDraft,
+                                );
                                 setCommentDraft("");
                                 toast.success("Comment posted.");
                               } catch {
@@ -562,26 +785,39 @@ const StudentDashboard = () => {
                           .slice()
                           .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
                           .map((c) => {
-                            const author = users.find((u) => u.id === c.authorId);
+                            const author = users.find(
+                              (u) => u.id === c.authorId,
+                            );
                             return (
-                              <div key={c.id} className="rounded-md border border-border bg-card p-3">
+                              <div
+                                key={c.id}
+                                className="rounded-md border border-border bg-card p-3"
+                              >
                                 <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                                   <span>{author?.name ?? "Unknown"}</span>
-                                  <span>{new Date(c.createdAt).toLocaleString()}</span>
+                                  <span>
+                                    {new Date(c.createdAt).toLocaleString()}
+                                  </span>
                                 </div>
-                                <div className="text-sm text-foreground whitespace-pre-wrap">{c.text}</div>
+                                <div className="text-sm text-foreground whitespace-pre-wrap">
+                                  {c.text}
+                                </div>
                               </div>
                             );
                           })}
                         {(selectedMeeting.comments ?? []).length === 0 ? (
-                          <div className="text-sm text-muted-foreground">No comments yet.</div>
+                          <div className="text-sm text-muted-foreground">
+                            No comments yet.
+                          </div>
                         ) : null}
                       </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">Create a meeting to start drafting an agenda.</div>
+                <div className="text-sm text-muted-foreground">
+                  Create a meeting to start drafting an agenda.
+                </div>
               )}
             </Card>
           </div>
@@ -589,9 +825,12 @@ const StudentDashboard = () => {
           <div className="mt-10">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-serif text-xl font-semibold text-foreground">Purchase requests</h2>
+                <h2 className="font-serif text-xl font-semibold text-foreground">
+                  Purchase requests
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  Request items for this project. Your instructor will review and approve/reject.
+                  Request items for this project. Your instructor will review
+                  and approve/reject.
                 </p>
               </div>
               <Dialog>
@@ -608,7 +847,11 @@ const StudentDashboard = () => {
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <Label>Item</Label>
-                      <Input value={prItem} onChange={(e) => setPrItem(e.target.value)} placeholder="e.g. Arduino Uno" />
+                      <Input
+                        value={prItem}
+                        onChange={(e) => setPrItem(e.target.value)}
+                        placeholder="e.g. Arduino Uno"
+                      />
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-1.5">
@@ -617,7 +860,9 @@ const StudentDashboard = () => {
                           type="number"
                           min={1}
                           value={prQty}
-                          onChange={(e) => setPrQty(Math.max(1, Number(e.target.value || 1)))}
+                          onChange={(e) =>
+                            setPrQty(Math.max(1, Number(e.target.value || 1)))
+                          }
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -627,17 +872,27 @@ const StudentDashboard = () => {
                           min={0}
                           step="0.01"
                           value={prCost}
-                          onChange={(e) => setPrCost(Math.max(0, Number(e.target.value || 0)))}
+                          onChange={(e) =>
+                            setPrCost(Math.max(0, Number(e.target.value || 0)))
+                          }
                         />
                       </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label>Link</Label>
-                      <Input value={prLink} onChange={(e) => setPrLink(e.target.value)} placeholder="https://…" />
+                      <Input
+                        value={prLink}
+                        onChange={(e) => setPrLink(e.target.value)}
+                        placeholder="https://…"
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Why it’s needed</Label>
-                      <Textarea value={prWhy} onChange={(e) => setPrWhy(e.target.value)} rows={4} />
+                      <Textarea
+                        value={prWhy}
+                        onChange={(e) => setPrWhy(e.target.value)}
+                        rows={4}
+                      />
                     </div>
                   </div>
 
@@ -678,19 +933,30 @@ const StudentDashboard = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-foreground">{r.item}</span>
-                        <span className="text-xs text-muted-foreground">×{r.quantity}</span>
+                        <span className="font-medium text-foreground">
+                          {r.item}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          ×{r.quantity}
+                        </span>
                         <StatusBadge status={r.status} />
                       </div>
                       <div className="mt-1 text-sm text-muted-foreground">
                         Cost: {money.format(Number(r.cost) || 0)}
                       </div>
                       {r.link ? (
-                        <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline" href={r.link} target="_blank" rel="noreferrer">
+                        <a
+                          className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                          href={r.link}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           <ExternalLink className="h-4 w-4" /> View item link
                         </a>
                       ) : null}
-                      <p className="mt-3 text-sm text-foreground">{r.justification}</p>
+                      <p className="mt-3 text-sm text-foreground">
+                        {r.justification}
+                      </p>
                       {r.reviewNote ? (
                         <p className="mt-3 text-sm text-muted-foreground">
                           Instructor note: {r.reviewNote}
@@ -720,13 +986,17 @@ const StudentDashboard = () => {
     <AppShell roleLabel="Student" nav={nav}>
       <div className="container mx-auto max-w-6xl px-6 py-8">
         <div className="mb-8">
-          <h1 className="font-serif text-3xl font-semibold text-foreground">Hi {user.name.split(" ")[0]} 👋</h1>
+          <h1 className="font-serif text-3xl font-semibold text-foreground">
+            Hi {user.name.split(" ")[0]} 👋
+          </h1>
           <p className="text-sm text-muted-foreground">
-            You're on {projects.length} project team{projects.length === 1 ? "" : "s"}. Pick one to view or submit a weekly update.
+            You're on {projects.length} project team
+            {projects.length === 1 ? "" : "s"}. Pick one to view or submit a
+            weekly update.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 mb-8">
           {projects.map((p) => {
             const course = courses.find((c) => c.id === p.courseId);
             const lastUpdate = updates
@@ -734,46 +1004,76 @@ const StudentDashboard = () => {
               .sort((a, b) => b.weekNumber - a.weekNumber)[0];
             const progressNow = lastUpdate?.progress ?? p.progress;
             return (
-              <Card key={p.id} className="academic-card cursor-pointer p-5" onClick={() => setSelectedProjectId(p.id)}>
+              <Card
+                key={p.id}
+                className="academic-card cursor-pointer p-5"
+                onClick={() => setSelectedProjectId(p.id)}
+              >
                 <div className="mb-3 flex items-start justify-between">
                   <div>
-                    <Badge variant="secondary" className="mb-2">{course?.code}</Badge>
-                    <h3 className="font-serif text-lg font-semibold text-foreground">{p.name}</h3>
-                    <p className="text-sm text-muted-foreground">{p.description}</p>
+                    <Badge variant="secondary" className="mb-2">
+                      {course?.code}
+                    </Badge>
+                    <h3 className="font-serif text-lg font-semibold text-foreground">
+                      {p.name}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {p.description}
+                    </p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="mb-3 flex items-center gap-2">
                   <div className="flex -space-x-2">
-                    {p.studentIds.map((sid) => <Avatar key={sid} userId={sid} size={24} />)}
+                    {p.studentIds.map((sid) => (
+                      <Avatar key={sid} userId={sid} size={24} />
+                    ))}
                   </div>
-                  <span className="text-xs text-muted-foreground">{p.studentIds.length} teammates</span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.studentIds.length} teammates
+                  </span>
                 </div>
                 <div className="mb-3">
                   <div className="mb-1 flex justify-between text-xs">
                     <span className="text-muted-foreground">Progress</span>
-                    <span className="font-medium text-primary">{progressNow}%</span>
+                    <span className="font-medium text-primary">
+                      {progressNow}%
+                    </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full bg-gradient-hero" style={{ width: `${progressNow}%` }} />
+                    <div
+                      className="h-full bg-gradient-hero"
+                      style={{ width: `${progressNow}%` }}
+                    />
                   </div>
                 </div>
                 {lastUpdate ? (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Latest: Week {lastUpdate.weekNumber}</span>
+                    <span className="text-muted-foreground">
+                      Latest: Week {lastUpdate.weekNumber}
+                    </span>
                     <StatusBadge status={lastUpdate.status} />
                   </div>
                 ) : (
-                  <span className="text-xs text-muted-foreground">No updates yet — start your first one</span>
+                  <span className="text-xs text-muted-foreground">
+                    No updates yet — start your first one
+                  </span>
                 )}
               </Card>
             );
           })}
           {projects.length === 0 && (
             <Card className="academic-card p-8 text-center text-sm text-muted-foreground md:col-span-2">
-              You haven't been assigned to any projects yet. Reach out to your instructor.
+              You haven't been assigned to any projects yet. Reach out to your
+              instructor.
             </Card>
           )}
+        </div>
+
+        <div className="mb-8">
+          <h1 className="font-serif text-3xl font-semibold text-foreground">
+            Upcoming meetings ⏰
+          </h1>
         </div>
       </div>
     </AppShell>

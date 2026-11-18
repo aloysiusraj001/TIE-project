@@ -113,7 +113,13 @@ export interface WeeklyUpdateEvent {
   note?: string;
 
   // optional metadata
-  fields?: ("thisWeekGoals" | "nextWeekGoals" | "blockers" | "progress" | "links")[];
+  fields?: (
+    | "thisWeekGoals"
+    | "nextWeekGoals"
+    | "blockers"
+    | "progress"
+    | "links"
+  )[];
   statusFrom?: ApprovalStatus;
   statusTo?: ApprovalStatus;
   commentId?: string;
@@ -134,6 +140,7 @@ export interface WeeklyUpdate {
   blockers: string;
   progress: number;
   links: ResourceLink[];
+  linkPitchDeck: string;
   status: ApprovalStatus;
   comments: Comment[];
   submittedAt: string;

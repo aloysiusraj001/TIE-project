@@ -12,7 +12,16 @@ import { Slider } from "@/components/ui/slider";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
-import { Plus, Trash2, ExternalLink, MessageSquare, Send, Pencil, Save, X } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ExternalLink,
+  MessageSquare,
+  Send,
+  Pencil,
+  Save,
+  X,
+} from "lucide-react";
 
 interface Props {
   update: WeeklyUpdate;
@@ -21,14 +30,22 @@ interface Props {
   defaultOpen?: boolean;
 }
 
-export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props) => {
+export const WeeklyUpdateCard = ({
+  update,
+  viewer,
+  defaultOpen = false,
+}: Props) => {
   const reviewerEditUpdate = useApp((s) => s.reviewerEditUpdate);
   const resubmitUpdate = useApp((s) => s.resubmitUpdate);
   const setApproval = useApp((s) => s.setApproval);
   const addComment = useApp((s) => s.addComment);
   const currentUserId = useApp((s) => s.currentUserId)!;
-  const project = useApp((s) => s.projects.find((p) => p.id === update.projectId));
-  const lastEditor = useApp((s) => s.users.find((u) => u.id === update.lastEditedBy));
+  const project = useApp((s) =>
+    s.projects.find((p) => p.id === update.projectId),
+  );
+  const lastEditor = useApp((s) =>
+    s.users.find((u) => u.id === update.lastEditedBy),
+  );
 
   const [editing, setEditing] = useState(false);
   const [thisWeek, setThisWeek] = useState(update.thisWeekGoals);
@@ -38,6 +55,9 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
   const [links, setLinks] = useState(update.links);
   const [comment, setComment] = useState("");
   const [open, setOpen] = useState(defaultOpen);
+  const [linkPitchDeck, setLinkPitchDeck] = useState<string>(
+    update.linkPitchDeck,
+  );
 
   const canEdit = viewer === "instructor" || viewer === "admin";
   const canReview = viewer === "instructor" || viewer === "admin";
@@ -48,12 +68,26 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
     project.studentIds.includes(currentUserId);
 
   const saveEdits = () => {
-    reviewerEditUpdate(update.id, { thisWeekGoals: thisWeek, nextWeekGoals: nextWeek, blockers, progress, links });
+    reviewerEditUpdate(update.id, {
+      thisWeekGoals: thisWeek,
+      nextWeekGoals: nextWeek,
+      blockers,
+      linkPitchDeck: linkPitchDeck,
+      progress,
+      links,
+    });
     setEditing(false);
   };
 
   const resubmit = () => {
-    resubmitUpdate(update.id, { thisWeekGoals: thisWeek, nextWeekGoals: nextWeek, blockers, progress, links });
+    resubmitUpdate(update.id, {
+      thisWeekGoals: thisWeek,
+      nextWeekGoals: nextWeek,
+      blockers,
+      linkPitchDeck: linkPitchDeck,
+      progress,
+      links,
+    });
     setEditing(false);
   };
 
@@ -72,8 +106,12 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
       >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 flex-col items-center justify-center rounded-md bg-secondary text-primary">
-            <span className="text-[10px] font-medium uppercase leading-none">Wk</span>
-            <span className="font-serif text-base font-semibold leading-none">{update.weekNumber}</span>
+            <span className="text-[10px] font-medium uppercase leading-none">
+              Wk
+            </span>
+            <span className="font-serif text-base font-semibold leading-none">
+              {update.weekNumber}
+            </span>
           </div>
           <div>
             <div className="text-sm font-semibold text-foreground">
@@ -87,7 +125,9 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={update.status} />
-          <span className="text-xs text-muted-foreground">{open ? "Hide" : "View"}</span>
+          <span className="text-xs text-muted-foreground">
+            {open ? "Hide" : "View"}
+          </span>
         </div>
       </button>
 
@@ -97,11 +137,16 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
               <span>
                 Revision {update.revision ?? 1}
-                {update.lastEditedAt ? ` · Last edited ${format(new Date(update.lastEditedAt), "MMM d, h:mm a")}` : ""}
+                {update.lastEditedAt
+                  ? ` · Last edited ${format(new Date(update.lastEditedAt), "MMM d, h:mm a")}`
+                  : ""}
               </span>
               {update.lastEditedBy ? (
                 <span>
-                  Edited by <span className="font-medium text-foreground">{lastEditor?.name ?? "Unknown"}</span>
+                  Edited by{" "}
+                  <span className="font-medium text-foreground">
+                    {lastEditor?.name ?? "Unknown"}
+                  </span>
                 </span>
               ) : null}
             </div>
@@ -109,16 +154,25 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
           <div className="grid gap-5 md:grid-cols-2">
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="font-serif text-base font-semibold text-foreground">This week's goals</h4>
+                <h4 className="font-serif text-base font-semibold text-foreground">
+                  This week's goals
+                </h4>
                 {(canEdit || canTeamEdit) && !editing && (
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditing(true)}
+                  >
                     <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                   </Button>
                 )}
               </div>
               <ul className="space-y-2">
                 {(editing ? thisWeek : update.thisWeekGoals).map((g, idx) => (
-                  <li key={g.id} className="rounded-md border border-border bg-card p-3">
+                  <li
+                    key={g.id}
+                    className="rounded-md border border-border bg-card p-3"
+                  >
                     {editing ? (
                       <div className="space-y-2">
                         <div className="flex gap-2">
@@ -135,7 +189,9 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => setThisWeek(thisWeek.filter((_, i) => i !== idx))}
+                            onClick={() =>
+                              setThisWeek(thisWeek.filter((_, i) => i !== idx))
+                            }
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -181,7 +237,9 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                           </span>
                         </div>
                         {!g.achieved && g.reason && (
-                          <p className="mt-1.5 text-xs italic text-muted-foreground">Reason: {g.reason}</p>
+                          <p className="mt-1.5 text-xs italic text-muted-foreground">
+                            Reason: {g.reason}
+                          </p>
                         )}
                       </>
                     )}
@@ -201,10 +259,15 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
             </div>
 
             <div>
-              <h4 className="mb-2 font-serif text-base font-semibold text-foreground">Goals for next week</h4>
+              <h4 className="mb-2 font-serif text-base font-semibold text-foreground">
+                Goals for next week
+              </h4>
               <ul className="space-y-2">
                 {(editing ? nextWeek : update.nextWeekGoals).map((g, idx) => (
-                  <li key={g.id} className="rounded-md border border-border bg-card p-3">
+                  <li
+                    key={g.id}
+                    className="rounded-md border border-border bg-card p-3"
+                  >
                     {editing ? (
                       <div className="flex gap-2">
                         <Textarea
@@ -220,7 +283,9 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => setNextWeek(nextWeek.filter((_, i) => i !== idx))}
+                          onClick={() =>
+                            setNextWeek(nextWeek.filter((_, i) => i !== idx))
+                          }
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -254,6 +319,7 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                   setThisWeek(update.thisWeekGoals);
                   setNextWeek(update.nextWeekGoals);
                   setBlockers(update.blockers);
+                  setLinkPitchDeck(update.linkPitchDeck);
                   setProgress(update.progress);
                   setLinks(update.links);
                 }}
@@ -286,7 +352,11 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                 />
               ) : (
                 <p className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
-                  {update.blockers || <span className="text-muted-foreground">None reported.</span>}
+                  {update.blockers || (
+                    <span className="text-muted-foreground">
+                      None reported.
+                    </span>
+                  )}
                 </p>
               )}
             </div>
@@ -296,19 +366,32 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
               </Label>
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="font-serif text-2xl font-semibold text-primary">{(editing ? progress : update.progress)}%</span>
+                  <span className="font-serif text-2xl font-semibold text-primary">
+                    {editing ? progress : update.progress}%
+                  </span>
                   <span className="text-xs text-muted-foreground">overall</span>
                 </div>
                 {editing ? (
                   <>
-                    <Slider value={[progress]} onValueChange={(v) => setProgress(v[0])} min={0} max={100} step={1} />
+                    <Slider
+                      value={[progress]}
+                      onValueChange={(v) => setProgress(v[0])}
+                      min={0}
+                      max={100}
+                      step={1}
+                    />
                     <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                      <span>0%</span><span>50%</span><span>100%</span>
+                      <span>0%</span>
+                      <span>50%</span>
+                      <span>100%</span>
                     </div>
                   </>
                 ) : (
                   <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full bg-gradient-hero transition-all" style={{ width: `${update.progress}%` }} />
+                    <div
+                      className="h-full bg-gradient-hero transition-all"
+                      style={{ width: `${update.progress}%` }}
+                    />
                   </div>
                 )}
               </div>
@@ -329,7 +412,8 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                         onChange={(e) => {
                           const next = [...links];
                           const idx = next.findIndex((x) => x.id === l.id);
-                          if (idx >= 0) next[idx] = { ...next[idx], label: e.target.value };
+                          if (idx >= 0)
+                            next[idx] = { ...next[idx], label: e.target.value };
                           setLinks(next);
                         }}
                         className="text-sm"
@@ -339,12 +423,19 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                         onChange={(e) => {
                           const next = [...links];
                           const idx = next.findIndex((x) => x.id === l.id);
-                          if (idx >= 0) next[idx] = { ...next[idx], url: e.target.value };
+                          if (idx >= 0)
+                            next[idx] = { ...next[idx], url: e.target.value };
                           setLinks(next);
                         }}
                         className="text-sm flex-1"
                       />
-                      <Button size="icon" variant="ghost" onClick={() => setLinks(links.filter((x) => x.id !== l.id))}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() =>
+                          setLinks(links.filter((x) => x.id !== l.id))
+                        }
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -363,12 +454,43 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                 )}
               </div>
               {editing && (
-                <Button size="sm" variant="outline" className="mt-2" onClick={() => setLinks([...links, newLink()])}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => setLinks([...links, newLink()])}
+                >
                   <Plus className="mr-1 h-3.5 w-3.5" /> Add link
                 </Button>
               )}
             </div>
           )}
+
+          <div>
+            <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">
+              Link to latest Pitch Deck
+            </Label>
+            {editing ? (
+              <Input
+                value={linkPitchDeck}
+                onChange={(e) => {
+                  setLinkPitchDeck(e.target.value);
+                }}
+                className="text-sm flex-1"
+              />
+            ) : (
+              <a
+                key={linkPitchDeck}
+                href={linkPitchDeck}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-primary hover:border-primary"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {linkPitchDeck}
+              </a>
+            )}
+          </div>
 
           <Separator />
 
@@ -387,14 +509,18 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
                         <CommenterName id={c.authorId} />
                       </span>
                       <span>·</span>
-                      <span>{format(new Date(c.createdAt), "MMM d, h:mm a")}</span>
+                      <span>
+                        {format(new Date(c.createdAt), "MMM d, h:mm a")}
+                      </span>
                     </div>
                     <p className="text-sm text-foreground">{c.text}</p>
                   </div>
                 </div>
               ))}
               {update.comments.length === 0 && (
-                <p className="text-xs text-muted-foreground">No comments yet.</p>
+                <p className="text-xs text-muted-foreground">
+                  No comments yet.
+                </p>
               )}
             </div>
 
@@ -414,7 +540,9 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
 
           {canReview && (
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-              <span className="mr-auto text-xs text-muted-foreground">Set review status:</span>
+              <span className="mr-auto text-xs text-muted-foreground">
+                Set review status:
+              </span>
               {update.status === "approved" ? (
                 <span className="text-xs text-muted-foreground">
                   Locked after approval.
@@ -422,11 +550,15 @@ export const WeeklyUpdateCard = ({ update, viewer, defaultOpen = false }: Props)
               ) : null}
               <Button
                 size="sm"
-                variant={update.status === "needs_revision" ? "default" : "outline"}
+                variant={
+                  update.status === "needs_revision" ? "default" : "outline"
+                }
                 onClick={() => setApproval(update.id, "needs_revision")}
                 disabled={update.status === "approved"}
                 className={
-                  update.status === "needs_revision" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""
+                  update.status === "needs_revision"
+                    ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    : ""
                 }
               >
                 Needs revision

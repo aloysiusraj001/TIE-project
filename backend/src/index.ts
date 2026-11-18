@@ -747,6 +747,7 @@ app.post("/updates", requireFirebaseAuth, async (req, res) => {
   const weekStart = (body.weekStart ?? "").toString();
   const progress = Number(body.progress);
   const blockers = (body.blockers ?? "").toString();
+  const linkPitchDeck = (body.linkPitchDeck ?? "").toString();
   const thisWeekGoals = Array.isArray(body.thisWeekGoals)
     ? body.thisWeekGoals
     : [];
@@ -792,6 +793,7 @@ app.post("/updates", requireFirebaseAuth, async (req, res) => {
           "thisWeekGoals",
           "nextWeekGoals",
           "blockers",
+          "linkPitchDeck",
           "progress",
           "links",
         ],
@@ -800,6 +802,7 @@ app.post("/updates", requireFirebaseAuth, async (req, res) => {
     thisWeekGoals,
     nextWeekGoals,
     blockers,
+    linkPitchDeck,
     progress: Number.isFinite(progress) ? progress : 0,
     links,
     status: "pending",
@@ -847,6 +850,7 @@ app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
   if (patch.thisWeekGoals) fields.push("thisWeekGoals");
   if (patch.nextWeekGoals) fields.push("nextWeekGoals");
   if (patch.blockers !== undefined) fields.push("blockers");
+  if (patch.linkPitchDeck !== undefined) fields.push("linkPitchDeck");
   if (patch.progress !== undefined) fields.push("progress");
   if (patch.links) fields.push("links");
 
@@ -859,6 +863,9 @@ app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
     ...(patch.links ? { links: patch.links } : {}),
     ...(patch.blockers !== undefined
       ? { blockers: (patch.blockers ?? "").toString() }
+      : {}),
+    ...(patch.linkPitchDeck !== undefined
+      ? { linkPitchDeck: (patch.linkPitchDeck ?? "").toString() }
       : {}),
     ...(patch.progress !== undefined
       ? {
@@ -938,6 +945,7 @@ app.patch(
     if (patch.thisWeekGoals) fields.push("thisWeekGoals");
     if (patch.nextWeekGoals) fields.push("nextWeekGoals");
     if (patch.blockers !== undefined) fields.push("blockers");
+    if (patch.linkPitchDeck !== undefined) fields.push("linkPitchDeck");
     if (patch.progress !== undefined) fields.push("progress");
     if (patch.links) fields.push("links");
     if (fields.length === 0)
@@ -950,6 +958,10 @@ app.patch(
       ...(patch.links ? { links: patch.links } : {}),
       ...(patch.blockers !== undefined
         ? { blockers: (patch.blockers ?? "").toString() }
+        : {}),
+
+      ...(patch.linkPitchDeck !== undefined
+        ? { linkPitchDeck: (patch.linkPitchDeck ?? "").toString() }
         : {}),
       ...(patch.progress !== undefined
         ? {

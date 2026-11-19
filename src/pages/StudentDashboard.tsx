@@ -76,9 +76,13 @@ const StudentDashboard = () => {
   const meetings = useApp((s) => s.meetings);
   const createMeeting = useApp((s) => s.createMeeting);
   const updateMeetingAgenda = useApp((s) => s.updateMeetingAgenda);
+
   const updateMeetingActionItems = useApp((s) => s.updateMeetingActionItems);
   const setMeetingStatus = useApp((s) => s.setMeetingStatus);
   const updateMeetingProposedAt = useApp((s) => s.updateMeetingProposedAt);
+
+  const updateMeetingVenueDb = useApp((s) => s.updateMeetingVenueDb);
+
   const addMeetingComment = useApp((s) => s.addMeetingComment);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
@@ -94,6 +98,8 @@ const StudentDashboard = () => {
   const [commentDraft, setCommentDraft] = useState("");
   const [createProposedLocal, setCreateProposedLocal] = useState("");
   const [proposedLocalDraft, setProposedLocalDraft] = useState("");
+  const [createMeetingVenue, setCreateMeetingVenue] = useState("");
+  const [updateMeetingVenue, setUpdateMeetingVenue] = useState("");
   const [prItem, setPrItem] = useState("");
   const [prQty, setPrQty] = useState(1);
   const [prCost, setPrCost] = useState(0);
@@ -113,8 +119,65 @@ const StudentDashboard = () => {
   ];
   const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
 
-  // Get all meetings of all projects 
+  // Get all meetings of all present projects
+  const upcomingMeetings = useMemo(() => {
+    const projectIds = new Set(projects.map((p) => p.id));
+    return meetings.filter((m) => projectIds.has(m.projectId));
+  }, [meetings, projects]);
 
+  interface UpcomingMeetings2 {
+    advisorName: string;
+    projectName: string;
+    meetingVenue: string;
+    dateTime: string;
+    id: string;
+  }
+
+  const upMeets: UpcomingMeetings2[] = upcomingMeetings.map(
+    (upcomingMeeting) => {
+      const advisor = users.find((u) => u.id === upcomingMeeting.advisorId);
+      const project = projects.find((p) => p.id === upcomingMeeting.projectId);
+
+      return {
+        id: upcomingMeeting.id,
+        advisorName: advisor?.name ?? "Unknown Advisor",
+        projectName: project?.name ?? "Unknown Project",
+        meetingVenue: upcomingMeeting.meetingVenue,
+        dateTime: upcomingMeeting.proposedAt ?? "",
+      };
+    },
+  );
+
+  const now = Date.now();
+  const sortedMeetings = upMeets
+    .filter((m) => {
+      const time = new Date(m.dateTime).getTime();
+      return !Number.isNaN(time) && time >= now;
+    })
+    .sort(
+      (a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime(),
+    );
+
+  function formatMeetingDate(isoString: string, timeZone?: string): string {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+
+    const options: Intl.DateTimeFormatOptions = {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      ...(timeZone ? { timeZone } : {}),
+    };
+
+    // en-US produces "11/19/2026, 12:57 PM" -> replace ", " with a single space
+    return new Intl.DateTimeFormat("en-US", options)
+      .format(date)
+      .replace(", ", " ");
+  }
 
   const selectedProject = selectedProjectId
     ? projects.find((p) => p.id === selectedProjectId)
@@ -183,6 +246,8 @@ const StudentDashboard = () => {
     setProposedLocalDraft(
       isoToDatetimeLocalValue(selectedMeeting?.proposedAt ?? null),
     );
+
+    setUpdateMeetingVenue(selectedMeeting?.meetingVenue ?? null);
   }, [selectedMeeting?.id, selectedMeeting?.proposedAt]);
 
   useEffect(() => {
@@ -373,6 +438,22 @@ const StudentDashboard = () => {
                     className="h-9 w-full sm:w-[240px]"
                   />
                 </div>
+
+                <div className="space-y-1.5 sm:min-w-[200px]">
+                  <Label
+                    htmlFor="instructor-new-meeting-proposed"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Venue
+                  </Label>
+                  <Input
+                    id="instructor-new-meeting-proposed"
+                    value={createMeetingVenue}
+                    onChange={(e) => setCreateMeetingVenue(e.target.value)}
+                    className="h-9 w-full sm:w-[240px]"
+                  />
+                </div>
+
                 <Button
                   variant="outline"
                   onClick={async () => {
@@ -383,6 +464,7 @@ const StudentDashboard = () => {
                       const id = await createMeeting(
                         project.id,
                         advisorId,
+                        createMeetingVenue,
                         false,
                         iso ? { proposedAt: iso } : undefined,
                       );
@@ -407,6 +489,7 @@ const StudentDashboard = () => {
                       const id = await createMeeting(
                         project.id,
                         advisorId,
+                        createMeetingVenue,
                         true,
                         iso ? { proposedAt: iso } : undefined,
                       );
@@ -556,6 +639,46 @@ const StudentDashboard = () => {
                 </div>
               ) : null}
 
+              {selectedMeeting ? (
+                <div className="mb-4 flex flex-col gap-2 rounded-md border border-border/70 bg-muted/25 p-3 sm:flex-row sm:flex-wrap sm:items-end">
+                  <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
+                    <Label
+                      htmlFor="student-meeting-proposed"
+                      className="text-xs"
+                    >
+                      Venue
+                    </Label>
+
+                    <Input
+                      id="student-meeting-venue"
+                      value={updateMeetingVenue}
+                      onChange={(e) => setUpdateMeetingVenue(e.target.value)}
+                      className="h-9 w-full"
+                    />
+                  </div>{" "}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await updateMeetingVenueDb(
+                            selectedMeeting.id,
+                            updateMeetingVenue,
+                          );
+                          toast.success("Venue updated.");
+                        } catch (e) {
+                          const msg =
+                            e instanceof Error ? e.message : "Unknown error";
+                          toast.error(`Could not save: ${msg}`);
+                        }
+                      }}
+                    >
+                      Save venue
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {selectedMeeting ? (
                 <div className="grid gap-6 lg:grid-cols-3">
                   <div>
@@ -1074,6 +1197,47 @@ const StudentDashboard = () => {
           <h1 className="font-serif text-3xl font-semibold text-foreground">
             Upcoming meetings ⏰
           </h1>
+          {sortedMeetings.map((m) => (
+            <Card key={m.id} className="academic-card p-4 m-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Project
+                  </span>
+                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
+                    <span className="truncate">{m.projectName}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Requested by
+                  </span>
+                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
+                    <span className="truncate">{m.advisorName}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Date & Time
+                  </span>
+                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
+                    <span>{formatMeetingDate(m.dateTime)}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Venue
+                  </span>
+                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
+                    <span>{m.meetingVenue}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       </div>
     </AppShell>

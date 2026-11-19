@@ -1357,11 +1357,13 @@ app.post(
 
       const body = (req.body ?? {}) as {
         advisorId?: unknown;
+        meetingVenue?: unknown;
         inheritFromLatest?: unknown;
         proposedAt?: unknown;
       };
       const advisorId = normalizeAdvisorId(body.advisorId);
       const inheritFromLatest = Boolean(body.inheritFromLatest);
+      const meetingVenue = body.meetingVenue;
       let proposedAt: string | null = null;
       if (body.proposedAt === null || body.proposedAt === "") proposedAt = null;
       else if (typeof body.proposedAt === "string" && body.proposedAt.trim()) {
@@ -1437,6 +1439,7 @@ app.post(
         id,
         projectId,
         advisorId,
+        meetingVenue,
         sequence: nextSeq,
         status: "draft",
         inheritedFromMeetingId,
@@ -1550,7 +1553,11 @@ app.patch("/meetings/:id/details", requireFirebaseAuth, async (req, res) => {
   if (!access.ok)
     return res.status(access.status).json({ error: access.error });
 
-  const raw = (req.body ?? {}) as { proposedAt?: unknown };
+  const raw = (req.body ?? {}) as {
+    proposedAt?: unknown;
+    meetingVenue?: unknown;
+  };
+
   let proposedAt: string | null | undefined;
   if ("proposedAt" in raw) {
     if (raw.proposedAt === null || raw.proposedAt === "") proposedAt = null;
@@ -1564,9 +1571,23 @@ app.patch("/meetings/:id/details", requireFirebaseAuth, async (req, res) => {
     }
   }
 
+  let meetingVenue: string | null | undefined;
+  if ("meetingVenue" in raw) {
+    if (raw.meetingVenue === null) {
+      meetingVenue = null;
+    } else if (typeof raw.meetingVenue === "string") {
+      const trimmed = raw.meetingVenue.trim();
+      meetingVenue = trimmed ? trimmed : null;
+    } else {
+      return res.status(400).json({ error: "Invalid meetingVenue" });
+    }
+  }
+
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { updatedAt: now, updatedBy: u.id };
   if (proposedAt !== undefined) patch.proposedAt = proposedAt;
+  if (meetingVenue !== undefined) patch.meetingVenue = meetingVenue;
+
   await ref.update(patch);
   return res.json({ ok: true });
 });

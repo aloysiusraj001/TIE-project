@@ -127,6 +127,7 @@ interface AppState {
   createMeeting: (
     projectId: string,
     advisorId: AdvisorThreadId,
+    meetingVenue: string,
     inheritFromLatest: boolean,
     options?: { proposedAt?: string | null },
   ) => Promise<string>;
@@ -142,6 +143,12 @@ interface AppState {
     meetingId: string,
     proposedAt: string | null,
   ) => Promise<void>;
+
+  updateMeetingVenueDb: (
+    meetingId: string,
+    meetingVenue: string | null,
+  ) => Promise<void>;
+
   setMeetingStatus: (
     meetingId: string,
     status: "draft" | "held",
@@ -1021,7 +1028,13 @@ export const useApp = create<AppState>()((set, get) => {
       });
     },
 
-    createMeeting: async (projectId, advisorId, inheritFromLatest, options) => {
+    createMeeting: async (
+      projectId,
+      advisorId,
+      meetingVenue,
+      inheritFromLatest,
+      options,
+    ) => {
       if (!backendUrl) throw new Error("Missing backend URL");
       const endpoint = `${backendUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectId)}/meetings`;
       const proposedAt = options?.proposedAt;
@@ -1033,6 +1046,7 @@ export const useApp = create<AppState>()((set, get) => {
         },
         body: JSON.stringify({
           advisorId,
+          meetingVenue,
           inheritFromLatest,
           ...(proposedAt !== undefined ? { proposedAt } : {}),
         }),
@@ -1096,6 +1110,25 @@ export const useApp = create<AppState>()((set, get) => {
           ...(await authHeader()),
         },
         body: JSON.stringify({ proposedAt }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(
+          `Update meeting details failed (${res.status})${detail?.trim() ? `: ${detail.trim()}` : ""}`,
+        );
+      }
+    },
+
+    updateMeetingVenueDb: async (meetingId, meetingVenue) => {
+      if (!backendUrl) throw new Error("Missing backend URL");
+      const endpoint = `${backendUrl.replace(/\/$/, "")}/meetings/${encodeURIComponent(meetingId)}/details`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ meetingVenue }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");

@@ -398,7 +398,7 @@ export const WeeklyUpdateCard = ({
             </div>
           </div>
 
-          {(editing ? links.length > 0 : update.links.length > 0) && (
+          {(editing ? links.length >= 0 : update.links.length > 0) && (
             <div>
               <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">
                 Linked resources
@@ -409,6 +409,7 @@ export const WeeklyUpdateCard = ({
                     <div key={l.id} className="flex w-full gap-2">
                       <Input
                         value={l.label}
+                        placeholder="Attach Figma files, GitHub PRs, Google Docs, research notes, etc."
                         onChange={(e) => {
                           const next = [...links];
                           const idx = next.findIndex((x) => x.id === l.id);
@@ -416,10 +417,11 @@ export const WeeklyUpdateCard = ({
                             next[idx] = { ...next[idx], label: e.target.value };
                           setLinks(next);
                         }}
-                        className="text-sm"
+                        className="text-sm flex-1 min-w-0"
                       />
                       <Input
                         value={l.url}
+                        placeholder="https://..."
                         onChange={(e) => {
                           const next = [...links];
                           const idx = next.findIndex((x) => x.id === l.id);
@@ -427,7 +429,7 @@ export const WeeklyUpdateCard = ({
                             next[idx] = { ...next[idx], url: e.target.value };
                           setLinks(next);
                         }}
-                        className="text-sm flex-1"
+                        className="text-sm flex-1 min-w-0"
                       />
                       <Button
                         size="icon"

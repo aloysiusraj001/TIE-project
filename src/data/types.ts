@@ -64,6 +64,7 @@ export interface Meeting {
   advisorId: AdvisorThreadId;
   /** Backward compatibility for older docs created before advisorId existed. */
   advisorTrack?: string;
+  meetingVenue: string;
   sequence: number;
   status: MeetingStatus;
   inheritedFromMeetingId?: string | null;

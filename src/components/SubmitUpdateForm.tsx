@@ -53,8 +53,14 @@ export const SubmitUpdateForm = ({
   );
 
   const handleSubmit = () => {
+
     if (thisWeek.every((g) => !g.text.trim())) {
       toast.error("Please add at least one goal for this week.");
+      return;
+    }
+
+    if (links.some((l) => !l.url.trim())) {
+      toast.error("One of the links has no URL.");
       return;
     }
     submitUpdate({
@@ -253,7 +259,7 @@ export const SubmitUpdateForm = ({
                   next[idx] = { ...l, label: e.target.value };
                   setLinks(next);
                 }}
-                className="text-sm"
+                className="flex-1 min-w-0 text-sm"
               />
               <Input
                 placeholder="https://…"
@@ -263,7 +269,7 @@ export const SubmitUpdateForm = ({
                   next[idx] = { ...l, url: e.target.value };
                   setLinks(next);
                 }}
-                className="flex-1 text-sm"
+                className="flex-1 min-w-0 text-sm"
               />
               <Button
                 size="icon"

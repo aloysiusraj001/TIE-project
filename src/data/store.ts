@@ -77,6 +77,8 @@ interface AppState {
     op: "add" | "remove",
   ) => Promise<void>;
 
+  archiveProject: (projectId: string) => Promise<void>;
+
   // updates
   submitUpdate: (
     u: Omit<WeeklyUpdate, "id" | "submittedAt" | "status" | "comments">,
@@ -690,6 +692,32 @@ export const useApp = create<AppState>()((set, get) => {
           : existing.filter((x) => x !== advisorId);
       await updateDoc(doc(firestore, "projects", projectId), {
         assignedAdvisorIds: next,
+      });
+    },
+
+    archiveProject: async (projectId) => {
+      const project = get().projects.find((p) => p.id === projectId);
+      if (!project) return;
+      const fbUser = firebaseAuth.currentUser;
+      if (backendUrl && fbUser) {
+        const token = await fbUser.getIdToken();
+        const endpoint = `${backendUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectId)}/archive`;
+        const res = await fetch(endpoint, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ projectId }),
+        });
+        if (!res.ok)
+          throw new Error(
+            `Backend update project archive failed (${res.status})`,
+          );
+        return;
+      }
+      await updateDoc(doc(firestore, "projects", projectId), {
+        isArchived: true,
       });
     },
 

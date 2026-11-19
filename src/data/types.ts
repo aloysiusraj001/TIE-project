@@ -30,6 +30,7 @@ export interface Project {
   /** Project-scoped support staff (instructor accounts; do not imply course-wide access). */
   assignedAdvisorIds?: string[];
   progress: number; // 0-100
+  isArchived: boolean;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "needs_revision";

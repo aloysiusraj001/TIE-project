@@ -48,6 +48,7 @@ import {
   isUserCourseStaffForCourse,
   projectsVisibleOnInstructorHub,
 } from "@/lib/userCapabilities";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -127,21 +128,34 @@ const InstructorDashboard = () => {
     (c.instructorIds ?? []).includes(user.id),
   );
   const isProjectOnlyInstructor = isInstructorProjectOnlyView(user, allCourses);
-  const myProjects = useMemo(
-    () => projectsVisibleOnInstructorHub(user.id, allCourses, projects),
-    [projects, allCourses, user.id],
-  );
+
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
+
+  const filteredProjects = useMemo(() => {
+    const visibleProjects = projectsVisibleOnInstructorHub(
+      user.id,
+      allCourses,
+      projects,
+    );
+
+    if (!showArchivedProjects) {
+      return visibleProjects.filter((m) => !m.isArchived);
+    }
+
+    return visibleProjects;
+  }, [user.id, allCourses, projects, showArchivedProjects]);
+
   const myUpdates = updates.filter((u) =>
-    myProjects.some((p) => p.id === u.projectId),
+    filteredProjects.some((p) => p.id === u.projectId),
   );
   const pendingUpdates = myUpdates.filter((u) => u.status === "pending");
   const pending = pendingUpdates.length;
   const students = users.filter((u) => u.role === "student");
 
   const upcomingMeetings = useMemo(() => {
-    const projectIds = new Set(myProjects.map((p) => p.id));
+    const projectIds = new Set(filteredProjects.map((p) => p.id));
     return meetings.filter((m) => projectIds.has(m.projectId));
-  }, [meetings, myProjects]);
+  }, [meetings, filteredProjects]);
 
   interface UpcomingMeetings2 {
     advisorName: string;
@@ -1194,7 +1208,7 @@ const InstructorDashboard = () => {
               ? [
                   {
                     value: "projects",
-                    label: <>My projects ({myProjects.length})</>,
+                    label: <>My projects ({filteredProjects.length})</>,
                   },
                   { value: "pending", label: <>Pending reviews ({pending})</> },
                   {
@@ -1205,7 +1219,7 @@ const InstructorDashboard = () => {
               : [
                   {
                     value: "projects",
-                    label: <>My projects ({myProjects.length})</>,
+                    label: <>My projects ({filteredProjects.length})</>,
                   },
                   { value: "pending", label: <>Pending reviews ({pending})</> },
                   {
@@ -1221,72 +1235,86 @@ const InstructorDashboard = () => {
         />
 
         {activeTab === "projects" && (
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            {myProjects.map((p) => {
-              const course = allCourses.find((c) => c.id === p.courseId);
-              const lastUpdate = updates
-                .filter((u) => u.projectId === p.id)
-                .sort((a, b) => b.weekNumber - a.weekNumber)[0];
-              const progressNow = lastUpdate?.progress ?? p.progress;
-              return (
-                <Card
-                  key={p.id}
-                  className="academic-card cursor-pointer p-5"
-                  onClick={() => setSelectedProjectId(p.id)}
-                >
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <Badge variant="secondary" className="mb-2">
-                        {course?.code}
-                      </Badge>
-                      <h3 className="font-serif text-lg font-semibold text-foreground">
-                        {p.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {p.description}
-                      </p>
+          <div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              {filteredProjects.map((p) => {
+                const course = allCourses.find((c) => c.id === p.courseId);
+                const lastUpdate = updates
+                  .filter((u) => u.projectId === p.id)
+                  .sort((a, b) => b.weekNumber - a.weekNumber)[0];
+                const progressNow = lastUpdate?.progress ?? p.progress;
+                return (
+                  <Card
+                    key={p.id}
+                    className="academic-card cursor-pointer p-5"
+                    onClick={() => setSelectedProjectId(p.id)}
+                  >
+                    <div className="mb-3 flex items-start justify-between">
+                      <div>
+                        <Badge variant="secondary" className="mb-2">
+                          {course?.code}
+                        </Badge>
+                        <h3 className="font-serif text-lg font-semibold text-foreground">
+                          {p.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {p.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex -space-x-2">
-                      {p.studentIds.map((sid) => (
-                        <Avatar key={sid} userId={sid} size={24} />
-                      ))}
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {p.studentIds.length} students
-                    </span>
-                  </div>
-                  <div className="mb-3">
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium text-primary">
-                        {progressNow}%
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="flex -space-x-2">
+                        {p.studentIds.map((sid) => (
+                          <Avatar key={sid} userId={sid} size={24} />
+                        ))}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {p.studentIds.length} students
                       </span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full bg-gradient-hero"
-                        style={{ width: `${progressNow}%` }}
-                      />
+                    <div className="mb-3">
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-muted-foreground">Progress</span>
+                        <span className="font-medium text-primary">
+                          {progressNow}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className="h-full bg-gradient-hero"
+                          style={{ width: `${progressNow}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  {lastUpdate ? (
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        Latest: Week {lastUpdate.weekNumber}
+                    {lastUpdate ? (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Latest: Week {lastUpdate.weekNumber}
+                        </span>
+                        <StatusBadge status={lastUpdate.status} />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        No updates yet
                       </span>
-                      <StatusBadge status={lastUpdate.status} />
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      No updates yet
-                    </span>
-                  )}
-                </Card>
-              );
-            })}
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+            <div className="mt-2">
+              <Checkbox
+                className="mx-2"
+                checked={!!showArchivedProjects}
+                onCheckedChange={(v) => {
+                  setShowArchivedProjects(!showArchivedProjects);
+                }}
+              />
+              <span className="text-sm text-muted-foreground">
+                Show archived projects
+              </span>
+            </div>{" "}
           </div>
         )}
 

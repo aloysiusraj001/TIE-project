@@ -43,6 +43,7 @@ import {
   formatMeetingProposed,
   isoToDatetimeLocalValue,
 } from "@/lib/meetingTime";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const newMeetingItem = (text = "", byUserId = "unknown"): MeetingItem => ({
   id: `mi-${Math.random().toString(36).slice(2, 9)}`,
@@ -110,6 +111,8 @@ const StudentDashboard = () => {
     currency: "HKD",
   });
 
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
+
   const nav = [
     {
       to: "/student",
@@ -117,7 +120,15 @@ const StudentDashboard = () => {
       icon: <LayoutDashboard className="h-4 w-4" />,
     },
   ];
-  const projects = allProjects.filter((p) => p.studentIds.includes(user.id));
+  const projects = allProjects.filter((p) => p.studentIds?.includes(user.id));
+
+  const filteredProjects = useMemo(() => {
+    if (!showArchivedProjects) {
+      return projects.filter((m) => !m.isArchived);
+    }
+
+    return projects;
+  }, [projects, showArchivedProjects]);
 
   // Get all meetings of all present projects
   const upcomingMeetings = useMemo(() => {
@@ -1113,14 +1124,13 @@ const StudentDashboard = () => {
             Hi {user.name.split(" ")[0]} 👋
           </h1>
           <p className="text-sm text-muted-foreground">
-            You're on {projects.length} project team
+            You're on {filteredProjects.length} project team
             {projects.length === 1 ? "" : "s"}. Pick one to view or submit a
             weekly update.
           </p>
         </div>
-
         <div className="grid gap-4 md:grid-cols-2 mb-8">
-          {projects.map((p) => {
+          {filteredProjects.map((p) => {
             const course = courses.find((c) => c.id === p.courseId);
             const lastUpdate = updates
               .filter((u) => u.projectId === p.id)
@@ -1192,7 +1202,14 @@ const StudentDashboard = () => {
             </Card>
           )}
         </div>
-
+        <Checkbox
+          className="mx-2"
+          checked={!!showArchivedProjects}
+          onCheckedChange={(v) => {
+            setShowArchivedProjects(!showArchivedProjects);
+          }}
+        />
+        <span className="text-sm text-muted-foreground">Show archived projects</span>
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-semibold text-foreground">
             Upcoming meetings ⏰

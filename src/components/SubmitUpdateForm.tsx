@@ -37,23 +37,22 @@ export const SubmitUpdateForm = ({
   const [blockers, setBlockers] = useState("");
   const [progress, setProgress] = useState(project.progress);
   const [links, setLinks] = useState<ResourceLink[]>([]);
-  const [linkPitchDeck, setLinkPitchDeck] = useState<string>(
-    updates
+  const [linkPitchDeck, setLinkPitchDeck] = useState<string>(() => {
+    const latestUpdate = updates
       .filter(
         (u) =>
           u.projectId === project.id &&
-          u.linkPitchDeck &&
+          typeof u.linkPitchDeck === "string" &&
           u.linkPitchDeck.trim() !== "",
       )
-      .reduce(
-        (latest, current) =>
-          !latest || current.weekNumber > latest.weekNumber ? current : latest,
-        null,
-      ).linkPitchDeck || "",
-  );
+      .reduce<
+        (typeof updates)[number] | null
+      >((latest, current) => (!latest || current.weekNumber > latest.weekNumber ? current : latest), null);
+
+    return latestUpdate?.linkPitchDeck ?? "";
+  });
 
   const handleSubmit = () => {
-
     if (thisWeek.every((g) => !g.text.trim())) {
       toast.error("Please add at least one goal for this week.");
       return;

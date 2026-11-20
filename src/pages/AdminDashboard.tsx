@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useApp } from "@/data/store";
 import { Avatar } from "@/components/Avatar";
@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import { Role } from "@/data/types";
 import { toast } from "sonner";
+
+import { Checkbox } from "@/components/ui/checkbox";
 
 type AdminTab = "users" | "courses" | "projects";
 
@@ -76,6 +78,7 @@ const AdminDashboard = () => {
     removeStudentFromProject,
     updateProjectAdvisors,
     archiveProject,
+    restoreProject,
   } = useApp();
 
   const nav = [
@@ -97,6 +100,8 @@ const AdminDashboard = () => {
   const [pDesc, setPDesc] = useState("");
   const [pCourse, setPCourse] = useState("");
 
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
+
   const instructors = users.filter((u) => u.role === "instructor");
   /** Course `instructorIds` — only `instructor` accounts. */
   const courseInstructorCandidates = instructors;
@@ -105,6 +110,14 @@ const AdminDashboard = () => {
   const students = users.filter((u) => u.role === "student");
 
   console.log("projects", projects);
+
+  const filteredProjects = useMemo(() => {
+    if (!showArchivedProjects) {
+      return projects.filter((m) => !m.isArchived);
+    }
+
+    return projects;
+  }, [projects, showArchivedProjects]);
 
   return (
     <AppShell roleLabel="Admin" nav={nav}>
@@ -555,9 +568,16 @@ const AdminDashboard = () => {
                 Add project
               </Button>
             </Card>
-
+            <Checkbox
+              className="mx-2"
+              checked={!!showArchivedProjects}
+              onCheckedChange={(v) => {
+                setShowArchivedProjects(!showArchivedProjects);
+              }}
+            />
+           <span className="text-sm text-muted-foreground">Show archived projects</span>
             <div className="grid gap-4 lg:grid-cols-2">
-              {projects.map((p) => {
+              {filteredProjects.map((p) => {
                 const course = courses.find((c) => c.id === p.courseId);
                 const rosterIds =
                   ((course?.studentIds ?? []) as string[]) ?? [];
@@ -600,7 +620,7 @@ const AdminDashboard = () => {
                           </span>
                         );
                       })}
-                      {p.studentIds.length === 0 && (
+                      {p.studentIds?.length === 0 && (
                         <span className="text-xs text-muted-foreground">
                           No students yet.
                         </span>
@@ -702,6 +722,7 @@ const AdminDashboard = () => {
 
                     {!p.isArchived ? (
                       <Button
+                        className="mt-2"
                         onClick={() => {
                           try {
                             archiveProject(p.id);
@@ -714,7 +735,24 @@ const AdminDashboard = () => {
                         Archive
                       </Button>
                     ) : (
-                      <div>Project is archived</div>
+                      <div className="flex flex-col gap-2 mt-2">
+                        <span className="text-xs text-muted-foreground">
+                          Project is archived
+                        </span>
+                        <Button
+                          className="mt-2 w-1/4"
+                          onClick={() => {
+                            try {
+                              restoreProject(p.id);
+                              toast.success("Project restored.");
+                            } catch {
+                              toast.error("Could not update project.");
+                            }
+                          }}
+                        >
+                          Restore
+                        </Button>
+                      </div>
                     )}
                   </Card>
                 );

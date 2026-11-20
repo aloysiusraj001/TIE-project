@@ -1392,6 +1392,56 @@ app.patch(
   },
 );
 
+app.patch(
+  "/projects/:projectId/restore",
+  requireFirebaseAuth,
+  async (req, res) => {
+    try {
+      console.log("restore");
+
+      const u = await getCurrentUser(req);
+      if (!u?.id || !u.role)
+        return res.status(403).json({ error: "Missing user profile" });
+
+      const projectId = (req.params.projectId ?? "").toString().trim();
+      if (!projectId)
+        return res.status(400).json({ error: "projectId is required" });
+      console.log("projectId", projectId);
+      const db = getFirestore();
+      const access = await canAccessProject(db, projectId, u.id, u.role);
+      if (!access.ok)
+        return res.status(access.status).json({ error: access.error });
+
+      await db
+        .collection("projects")
+        .doc(projectId)
+        .update({ isArchived: false });
+
+      console.log("restore end");
+
+      return res.json({ ok: true, projectId });
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" ? e.message : "Unknown error";
+      // Firestore composite index required shows up as FAILED_PRECONDITION with a console link.
+      if (
+        msg.includes("FAILED_PRECONDITION") &&
+        msg.includes("requires an index")
+      ) {
+        return res.status(400).json({
+          error:
+            "Firestore index required for project query. Create the composite index, then retry.",
+          detail: msg,
+        });
+      }
+      // eslint-disable-next-line no-console
+      console.error("Restore project failed:", e);
+      return res
+        .status(500)
+        .json({ error: "Restore project failed", detail: msg });
+    }
+  },
+);
+
 app.post(
   "/projects/:projectId/meetings",
   requireFirebaseAuth,

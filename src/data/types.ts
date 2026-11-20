@@ -30,6 +30,7 @@ export interface Project {
   /** Project-scoped support staff (instructor accounts; do not imply course-wide access). */
   assignedAdvisorIds?: string[];
   progress: number; // 0-100
+  isArchived: boolean;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "needs_revision";
@@ -64,6 +65,7 @@ export interface Meeting {
   advisorId: AdvisorThreadId;
   /** Backward compatibility for older docs created before advisorId existed. */
   advisorTrack?: string;
+  meetingVenue: string;
   sequence: number;
   status: MeetingStatus;
   inheritedFromMeetingId?: string | null;
@@ -113,7 +115,13 @@ export interface WeeklyUpdateEvent {
   note?: string;
 
   // optional metadata
-  fields?: ("thisWeekGoals" | "nextWeekGoals" | "blockers" | "progress" | "links")[];
+  fields?: (
+    | "thisWeekGoals"
+    | "nextWeekGoals"
+    | "blockers"
+    | "progress"
+    | "links"
+  )[];
   statusFrom?: ApprovalStatus;
   statusTo?: ApprovalStatus;
   commentId?: string;
@@ -134,6 +142,7 @@ export interface WeeklyUpdate {
   blockers: string;
   progress: number;
   links: ResourceLink[];
+  linkPitchDeck: string;
   status: ApprovalStatus;
   comments: Comment[];
   submittedAt: string;

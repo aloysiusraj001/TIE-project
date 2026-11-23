@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useApp } from "@/data/store";
 import { Avatar } from "@/components/Avatar";
@@ -9,34 +9,85 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, Users as UsersIcon, BookOpen, FolderKanban, Plus, Trash2 } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users as UsersIcon,
+  BookOpen,
+  FolderKanban,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Role } from "@/data/types";
 import { toast } from "sonner";
 
+import { Checkbox } from "@/components/ui/checkbox";
+
 type AdminTab = "users" | "courses" | "projects";
 
-const Stat = ({ label, value, hint }: { label: string; value: string | number; hint?: string }) => (
+const Stat = ({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) => (
   <Card className="academic-card p-5">
-    <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-    <div className="mt-1 font-serif text-3xl font-semibold text-primary">{value}</div>
+    <div className="text-xs uppercase tracking-wider text-muted-foreground">
+      {label}
+    </div>
+    <div className="mt-1 font-serif text-3xl font-semibold text-primary">
+      {value}
+    </div>
     {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
   </Card>
 );
 
 const AdminDashboard = () => {
   const {
-    users, courses, projects, updates,
-    addUser, deleteUser, updateUserRole,
-    addCourse, assignInstructor, removeInstructor,
-    addStudentToCourse, removeStudentFromCourse,
-    addProject, assignStudentToProject, removeStudentFromProject, updateProjectAdvisors,
+    users,
+    courses,
+    projects,
+    updates,
+    addUser,
+    deleteUser,
+    updateUserRole,
+    addCourse,
+    assignInstructor,
+    removeInstructor,
+    addStudentToCourse,
+    removeStudentFromCourse,
+    addProject,
+    assignStudentToProject,
+    removeStudentFromProject,
+    updateProjectAdvisors,
+    archiveProject,
+    restoreProject,
   } = useApp();
 
-  const nav = [{ to: "/admin", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> }];
+  const nav = [
+    {
+      to: "/admin",
+      label: "Overview",
+      icon: <LayoutDashboard className="h-4 w-4" />,
+    },
+  ];
   const [activeTab, setActiveTab] = useState<AdminTab>("users");
 
   const [newName, setNewName] = useState("");
@@ -49,6 +100,8 @@ const AdminDashboard = () => {
   const [pDesc, setPDesc] = useState("");
   const [pCourse, setPCourse] = useState("");
 
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
+
   const instructors = users.filter((u) => u.role === "instructor");
   /** Course `instructorIds` — only `instructor` accounts. */
   const courseInstructorCandidates = instructors;
@@ -56,28 +109,72 @@ const AdminDashboard = () => {
   const projectAdvisorCandidates = instructors;
   const students = users.filter((u) => u.role === "student");
 
+  const filteredProjects = useMemo(() => {
+    if (!showArchivedProjects) {
+      return projects.filter((m) => !m.isArchived);
+    }
+
+    return projects;
+  }, [projects, showArchivedProjects]);
+
   return (
     <AppShell roleLabel="Admin" nav={nav}>
       <div className="container mx-auto max-w-7xl px-6 py-8">
         <div className="mb-8">
-          <h1 className="font-serif text-3xl font-semibold text-foreground">Administrator overview</h1>
-          <p className="text-sm text-muted-foreground">Manage users, courses, and project teams across the program.</p>
+          <h1 className="font-serif text-3xl font-semibold text-foreground">
+            Administrator overview
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Manage users, courses, and project teams across the program.
+          </p>
         </div>
 
         <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <Stat label="Users" value={users.length} hint={`${instructors.length} instructors · ${students.length} students`} />
+          <Stat
+            label="Users"
+            value={users.length}
+            hint={`${instructors.length} instructors · ${students.length} students`}
+          />
           <Stat label="Active courses" value={courses.length} />
           <Stat label="Projects" value={projects.length} />
-          <Stat label="Weekly updates" value={updates.length} hint={`${updates.filter((u) => u.status === "pending").length} pending review`} />
+          <Stat
+            label="Weekly updates"
+            value={updates.length}
+            hint={`${updates.filter((u) => u.status === "pending").length} pending review`}
+          />
         </div>
 
         <SegmentedTabs<AdminTab>
           value={activeTab}
           onChange={setActiveTab}
           tabs={[
-            { value: "users", label: <><UsersIcon className="mr-1.5 h-4 w-4" />Users</> },
-            { value: "courses", label: <><BookOpen className="mr-1.5 h-4 w-4" />Courses</> },
-            { value: "projects", label: <><FolderKanban className="mr-1.5 h-4 w-4" />Projects & teams</> },
+            {
+              value: "users",
+              label: (
+                <>
+                  <UsersIcon className="mr-1.5 h-4 w-4" />
+                  Users
+                </>
+              ),
+            },
+            {
+              value: "courses",
+              label: (
+                <>
+                  <BookOpen className="mr-1.5 h-4 w-4" />
+                  Courses
+                </>
+              ),
+            },
+            {
+              value: "projects",
+              label: (
+                <>
+                  <FolderKanban className="mr-1.5 h-4 w-4" />
+                  Projects & teams
+                </>
+              ),
+            },
           ]}
         />
 
@@ -85,22 +182,49 @@ const AdminDashboard = () => {
           <Card className="academic-card mt-5 p-6">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h2 className="font-serif text-xl font-semibold text-foreground">Users & roles</h2>
-                <p className="text-sm text-muted-foreground">Add new accounts and assign roles.</p>
+                <h2 className="font-serif text-xl font-semibold text-foreground">
+                  Users & roles
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Add new accounts and assign roles.
+                </p>
               </div>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button><Plus className="mr-1.5 h-4 w-4" />Add user</Button>
+                  <Button>
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add user
+                  </Button>
                 </DialogTrigger>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Add new user</DialogTitle></DialogHeader>
+                  <DialogHeader>
+                    <DialogTitle>Add new user</DialogTitle>
+                  </DialogHeader>
                   <div className="space-y-3">
-                    <div><Label>Full name</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} /></div>
-                    <div><Label>Email</Label><Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></div>
+                    <div>
+                      <Label>Full name</Label>
+                      <Input
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Email</Label>
+                      <Input
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                      />
+                    </div>
                     <div>
                       <Label>Role</Label>
-                      <Select value={newRole} onValueChange={(v) => setNewRole(v as Role)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      <Select
+                        value={newRole}
+                        onValueChange={(v) => setNewRole(v as Role)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="admin">Administrator</SelectItem>
                           <SelectItem value="instructor">Instructor</SelectItem>
@@ -117,13 +241,18 @@ const AdminDashboard = () => {
                           return;
                         }
                         try {
-                          await addUser({ name: newName, email: newEmail, role: newRole });
+                          await addUser({
+                            name: newName,
+                            email: newEmail,
+                            role: newRole,
+                          });
                           setNewName("");
                           setNewEmail("");
                           setNewRole("student");
                           toast.success("User added.");
                         } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          const msg =
+                            e instanceof Error ? e.message : "Unknown error";
                           toast.error(`Could not add user: ${msg}`);
                         }
                       }}
@@ -151,22 +280,37 @@ const AdminDashboard = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar userId={u.id} size={32} />
-                          <span className="font-medium text-foreground">{u.name}</span>
+                          <span className="font-medium text-foreground">
+                            {u.name}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {u.email}
+                      </td>
                       <td className="px-4 py-3">
-                        <Select value={u.role} onValueChange={(v) => updateUserRole(u.id, v as Role)}>
-                          <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                        <Select
+                          value={u.role}
+                          onValueChange={(v) => updateUserRole(u.id, v as Role)}
+                        >
+                          <SelectTrigger className="h-8 w-36">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">Administrator</SelectItem>
-                            <SelectItem value="instructor">Instructor</SelectItem>
+                            <SelectItem value="instructor">
+                              Instructor
+                            </SelectItem>
                             <SelectItem value="student">Student</SelectItem>
                           </SelectContent>
                         </Select>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="icon" variant="ghost" onClick={() => deleteUser(u.id)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deleteUser(u.id)}
+                        >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>
@@ -181,59 +325,123 @@ const AdminDashboard = () => {
         {activeTab === "courses" && (
           <div className="mt-5 space-y-5">
             <Card className="academic-card p-6">
-              <h2 className="mb-1 font-serif text-xl font-semibold text-foreground">Create course</h2>
+              <h2 className="mb-1 font-serif text-xl font-semibold text-foreground">
+                Create course
+              </h2>
               <div className="mt-3 grid gap-3 md:grid-cols-4">
-                <div><Label>Code</Label><Input value={cCode} onChange={(e) => setCCode(e.target.value)} placeholder="CS-490" /></div>
-                <div className="md:col-span-2"><Label>Name</Label><Input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Senior Capstone" /></div>
-                <div><Label>Term</Label><Input value={cTerm} onChange={(e) => setCTerm(e.target.value)} /></div>
+                <div>
+                  <Label>Code</Label>
+                  <Input
+                    value={cCode}
+                    onChange={(e) => setCCode(e.target.value)}
+                    placeholder="CS-490"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Name</Label>
+                  <Input
+                    value={cName}
+                    onChange={(e) => setCName(e.target.value)}
+                    placeholder="Senior Capstone"
+                  />
+                </div>
+                <div>
+                  <Label>Term</Label>
+                  <Input
+                    value={cTerm}
+                    onChange={(e) => setCTerm(e.target.value)}
+                  />
+                </div>
               </div>
-              <Button className="mt-4" onClick={() => {
-                if (!cCode.trim() || !cName.trim()) { toast.error("Code and name required."); return; }
-                addCourse({ code: cCode, name: cName, term: cTerm, instructorIds: [] });
-                setCCode(""); setCName("");
-                toast.success("Course created.");
-              }}><Plus className="mr-1.5 h-4 w-4" />Add course</Button>
+              <Button
+                className="mt-4"
+                onClick={() => {
+                  if (!cCode.trim() || !cName.trim()) {
+                    toast.error("Code and name required.");
+                    return;
+                  }
+                  addCourse({
+                    code: cCode,
+                    name: cName,
+                    term: cTerm,
+                    instructorIds: [],
+                  });
+                  setCCode("");
+                  setCName("");
+                  toast.success("Course created.");
+                }}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add course
+              </Button>
             </Card>
 
             <div className="grid gap-4 lg:grid-cols-2">
               {courses.map((c) => (
                 <Card key={c.id} className="academic-card p-5">
-                  <Badge variant="secondary" className="mb-2">{c.code}</Badge>
-                  <h3 className="font-serif text-lg font-semibold text-foreground">{c.name}</h3>
+                  <Badge variant="secondary" className="mb-2">
+                    {c.code}
+                  </Badge>
+                  <h3 className="font-serif text-lg font-semibold text-foreground">
+                    {c.name}
+                  </h3>
                   <p className="text-xs text-muted-foreground">{c.term}</p>
-                  <div className="mb-2 mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Instructors</div>
+                  <div className="mb-2 mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Instructors
+                  </div>
                   <div className="mb-3 flex flex-wrap gap-2">
                     {c.instructorIds.map((iid) => {
                       const instructor = users.find((u) => u.id === iid);
                       if (!instructor) return null;
                       return (
-                        <span key={iid} className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs">
+                        <span
+                          key={iid}
+                          className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                        >
                           <Avatar userId={iid} size={20} />
                           {instructor.name}
-                          <button onClick={() => removeInstructor(c.id, iid)} className="ml-1 text-muted-foreground hover:text-destructive">×</button>
+                          <button
+                            onClick={() => removeInstructor(c.id, iid)}
+                            className="ml-1 text-muted-foreground hover:text-destructive"
+                          >
+                            ×
+                          </button>
                         </span>
                       );
                     })}
-                    {c.instructorIds.length === 0 && <span className="text-xs text-muted-foreground">No instructors yet.</span>}
+                    {c.instructorIds.length === 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        No instructors yet.
+                      </span>
+                    )}
                   </div>
                   <Select onValueChange={(v) => assignInstructor(c.id, v)}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Assign instructor…" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Assign instructor…" />
+                    </SelectTrigger>
                     <SelectContent>
-                      {courseInstructorCandidates.filter((i) => !c.instructorIds.includes(i.id)).map((i) => (
-                        <SelectItem key={i.id} value={i.id}>
-                          {i.name}
-                        </SelectItem>
-                      ))}
+                      {courseInstructorCandidates
+                        .filter((i) => !c.instructorIds.includes(i.id))
+                        .map((i) => (
+                          <SelectItem key={i.id} value={i.id}>
+                            {i.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
 
-                  <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Students</div>
+                  <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Students
+                  </div>
                   <div className="mb-3 flex flex-wrap gap-2">
                     {((c.studentIds ?? []) as string[]).map((sid) => {
                       const student = users.find((u) => u.id === sid);
                       if (!student) return null;
                       return (
-                        <span key={sid} className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs">
+                        <span
+                          key={sid}
+                          className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                        >
                           <Avatar userId={sid} size={20} />
                           {student.name}
                           <button
@@ -242,7 +450,10 @@ const AdminDashboard = () => {
                                 await removeStudentFromCourse(c.id, sid);
                                 toast.success("Student removed from course.");
                               } catch (e) {
-                                const msg = e instanceof Error ? e.message : "Unknown error";
+                                const msg =
+                                  e instanceof Error
+                                    ? e.message
+                                    : "Unknown error";
                                 toast.error(`Could not remove student: ${msg}`);
                               }
                             }}
@@ -253,7 +464,11 @@ const AdminDashboard = () => {
                         </span>
                       );
                     })}
-                    {(c.studentIds?.length ?? 0) === 0 && <span className="text-xs text-muted-foreground">No students yet.</span>}
+                    {(c.studentIds?.length ?? 0) === 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        No students yet.
+                      </span>
+                    )}
                   </div>
                   <Select
                     onValueChange={async (sid) => {
@@ -261,16 +476,26 @@ const AdminDashboard = () => {
                         await addStudentToCourse(c.id, sid);
                         toast.success("Student added to course.");
                       } catch (e) {
-                        const msg = e instanceof Error ? e.message : "Unknown error";
+                        const msg =
+                          e instanceof Error ? e.message : "Unknown error";
                         toast.error(`Could not add student: ${msg}`);
                       }
                     }}
                   >
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Add student to course…" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Add student to course…" />
+                    </SelectTrigger>
                     <SelectContent>
-                      {students.filter((s) => !((c.studentIds ?? []) as string[]).includes(s.id)).map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
+                      {students
+                        .filter(
+                          (s) =>
+                            !((c.studentIds ?? []) as string[]).includes(s.id),
+                        )
+                        .map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </Card>
@@ -282,78 +507,168 @@ const AdminDashboard = () => {
         {activeTab === "projects" && (
           <div className="mt-5 space-y-5">
             <Card className="academic-card p-6">
-              <h2 className="mb-1 font-serif text-xl font-semibold text-foreground">Create project</h2>
+              <h2 className="mb-1 font-serif text-xl font-semibold text-foreground">
+                Create project
+              </h2>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div><Label>Project name</Label><Input value={pName} onChange={(e) => setPName(e.target.value)} /></div>
+                <div>
+                  <Label>Project name</Label>
+                  <Input
+                    value={pName}
+                    onChange={(e) => setPName(e.target.value)}
+                  />
+                </div>
                 <div>
                   <Label>Course</Label>
                   <Select value={pCourse} onValueChange={setPCourse}>
-                    <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select course" />
+                    </SelectTrigger>
                     <SelectContent>
-                      {courses.map((c) => <SelectItem key={c.id} value={c.id}>{c.code} — {c.name}</SelectItem>)}
+                      {courses.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.code} — {c.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="md:col-span-2"><Label>Description</Label><Textarea value={pDesc} onChange={(e) => setPDesc(e.target.value)} rows={2} /></div>
+                <div className="md:col-span-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={pDesc}
+                    onChange={(e) => setPDesc(e.target.value)}
+                    rows={2}
+                  />
+                </div>
               </div>
-              <Button className="mt-4" onClick={() => {
-                if (!pName.trim() || !pCourse) { toast.error("Name and course required."); return; }
-                addProject({ name: pName, description: pDesc, courseId: pCourse, studentIds: [] });
-                setPName(""); setPDesc(""); setPCourse("");
-                toast.success("Project created.");
-              }}><Plus className="mr-1.5 h-4 w-4" />Add project</Button>
+              <Button
+                className="mt-4"
+                onClick={() => {
+                  if (!pName.trim() || !pCourse) {
+                    toast.error("Name and course required.");
+                    return;
+                  }
+                  addProject({
+                    name: pName,
+                    description: pDesc,
+                    courseId: pCourse,
+                    studentIds: [],
+                    isArchived: false,
+                  });
+                  setPName("");
+                  setPDesc("");
+                  setPCourse("");
+                  toast.success("Project created.");
+                }}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add project
+              </Button>
             </Card>
-
+            <Checkbox
+              className="mx-2"
+              checked={!!showArchivedProjects}
+              onCheckedChange={(v) => {
+                setShowArchivedProjects(!showArchivedProjects);
+              }}
+            />
+           <span className="text-sm text-muted-foreground">Show archived projects</span>
             <div className="grid gap-4 lg:grid-cols-2">
-              {projects.map((p) => {
+              {filteredProjects.map((p) => {
                 const course = courses.find((c) => c.id === p.courseId);
-                const rosterIds = ((course?.studentIds ?? []) as string[]) ?? [];
-                const addableStudents = students.filter((s) => rosterIds.includes(s.id)).filter((s) => !p.studentIds.includes(s.id));
+                const rosterIds =
+                  ((course?.studentIds ?? []) as string[]) ?? [];
+                const addableStudents = students
+                  .filter((s) => rosterIds.includes(s.id))
+                  .filter((s) => !p.studentIds.includes(s.id));
                 return (
                   <Card key={p.id} className="academic-card p-5">
-                    <Badge variant="secondary" className="mb-2">{course?.code}</Badge>
-                    <h3 className="font-serif text-lg font-semibold text-foreground">{p.name}</h3>
-                    <p className="text-sm text-muted-foreground">{p.description}</p>
-                    <div className="mb-2 mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Team</div>
+                    <Badge variant="secondary" className="mb-2">
+                      {course?.code}
+                    </Badge>
+                    <h3 className="font-serif text-lg font-semibold text-foreground">
+                      {p.name}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {p.description}
+                    </p>
+                    <div className="mb-2 mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Team
+                    </div>
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {p.studentIds.map((sid) => {
+                      {p.studentIds?.map((sid) => {
                         const student = users.find((u) => u.id === sid);
                         if (!student) return null;
                         return (
-                          <span key={sid} className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs">
+                          <span
+                            key={sid}
+                            className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                          >
                             <Avatar userId={sid} size={20} />
                             {student.name}
-                            <button onClick={() => removeStudentFromProject(p.id, sid)} className="ml-1 text-muted-foreground hover:text-destructive">×</button>
+                            <button
+                              onClick={() =>
+                                removeStudentFromProject(p.id, sid)
+                              }
+                              className="ml-1 text-muted-foreground hover:text-destructive"
+                            >
+                              ×
+                            </button>
                           </span>
                         );
                       })}
-                      {p.studentIds.length === 0 && <span className="text-xs text-muted-foreground">No students yet.</span>}
+                      {p.studentIds?.length === 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          No students yet.
+                        </span>
+                      )}
                     </div>
-                    <Select onValueChange={(v) => assignStudentToProject(p.id, v)}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Add student to team…" /></SelectTrigger>
+                    <Select
+                      onValueChange={(v) => assignStudentToProject(p.id, v)}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Add student to team…" />
+                      </SelectTrigger>
                       <SelectContent>
                         {addableStudents.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
 
-                    <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Project support</div>
+                    <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Project support
+                    </div>
                     <div className="mb-3 flex flex-wrap gap-2">
                       {((p.assignedAdvisorIds ?? []) as string[]).map((aid) => {
                         const a = users.find((u) => u.id === aid);
                         if (!a) return null;
                         return (
-                          <span key={aid} className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs">
+                          <span
+                            key={aid}
+                            className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                          >
                             <Avatar userId={aid} size={20} />
                             {a.name}
                             <button
                               onClick={async () => {
                                 try {
-                                  await updateProjectAdvisors(p.id, aid, "remove");
-                                  toast.success("Support staff removed from project.");
+                                  await updateProjectAdvisors(
+                                    p.id,
+                                    aid,
+                                    "remove",
+                                  );
+                                  toast.success(
+                                    "Support staff removed from project.",
+                                  );
                                 } catch (e) {
-                                  const msg = e instanceof Error ? e.message : "Unknown error";
+                                  const msg =
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Unknown error";
                                   toast.error(`Could not remove: ${msg}`);
                                 }
                               }}
@@ -365,24 +680,36 @@ const AdminDashboard = () => {
                         );
                       })}
                       {(p.assignedAdvisorIds?.length ?? 0) === 0 && (
-                        <span className="text-xs text-muted-foreground">No extra project staff yet.</span>
+                        <span className="text-xs text-muted-foreground">
+                          No extra project staff yet.
+                        </span>
                       )}
                     </div>
                     <Select
                       onValueChange={async (aid) => {
                         try {
                           await updateProjectAdvisors(p.id, aid, "add");
-                          toast.success("Instructor added to project support list.");
+                          toast.success(
+                            "Instructor added to project support list.",
+                          );
                         } catch (e) {
-                          const msg = e instanceof Error ? e.message : "Unknown error";
+                          const msg =
+                            e instanceof Error ? e.message : "Unknown error";
                           toast.error(`Could not assign: ${msg}`);
                         }
                       }}
                     >
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Add project support (instructor)…" /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Add project support (instructor)…" />
+                      </SelectTrigger>
                       <SelectContent>
                         {projectAdvisorCandidates
-                          .filter((a) => !((p.assignedAdvisorIds ?? []) as string[]).includes(a.id))
+                          .filter(
+                            (a) =>
+                              !(
+                                (p.assignedAdvisorIds ?? []) as string[]
+                              ).includes(a.id),
+                          )
                           .map((a) => (
                             <SelectItem key={a.id} value={a.id}>
                               {a.name}
@@ -390,6 +717,41 @@ const AdminDashboard = () => {
                           ))}
                       </SelectContent>
                     </Select>
+
+                    {!p.isArchived ? (
+                      <Button
+                        className="mt-2"
+                        onClick={() => {
+                          try {
+                            archiveProject(p.id);
+                            toast.success("Project archived.");
+                          } catch {
+                            toast.error("Could not update project.");
+                          }
+                        }}
+                      >
+                        Archive
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col gap-2 mt-2">
+                        <span className="text-xs text-muted-foreground">
+                          Project is archived
+                        </span>
+                        <Button
+                          className="mt-2 w-1/4"
+                          onClick={() => {
+                            try {
+                              restoreProject(p.id);
+                              toast.success("Project restored.");
+                            } catch {
+                              toast.error("Could not update project.");
+                            }
+                          }}
+                        >
+                          Restore
+                        </Button>
+                      </div>
+                    )}
                   </Card>
                 );
               })}

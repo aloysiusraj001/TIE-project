@@ -747,6 +747,7 @@ app.post("/updates", requireFirebaseAuth, async (req, res) => {
   const weekStart = (body.weekStart ?? "").toString();
   const progress = Number(body.progress);
   const blockers = (body.blockers ?? "").toString();
+  const linkPitchDeck = (body.linkPitchDeck ?? "").toString();
   const thisWeekGoals = Array.isArray(body.thisWeekGoals)
     ? body.thisWeekGoals
     : [];
@@ -792,6 +793,7 @@ app.post("/updates", requireFirebaseAuth, async (req, res) => {
           "thisWeekGoals",
           "nextWeekGoals",
           "blockers",
+          "linkPitchDeck",
           "progress",
           "links",
         ],
@@ -800,6 +802,7 @@ app.post("/updates", requireFirebaseAuth, async (req, res) => {
     thisWeekGoals,
     nextWeekGoals,
     blockers,
+    linkPitchDeck,
     progress: Number.isFinite(progress) ? progress : 0,
     links,
     status: "pending",
@@ -847,6 +850,7 @@ app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
   if (patch.thisWeekGoals) fields.push("thisWeekGoals");
   if (patch.nextWeekGoals) fields.push("nextWeekGoals");
   if (patch.blockers !== undefined) fields.push("blockers");
+  if (patch.linkPitchDeck !== undefined) fields.push("linkPitchDeck");
   if (patch.progress !== undefined) fields.push("progress");
   if (patch.links) fields.push("links");
 
@@ -859,6 +863,9 @@ app.patch("/updates/:id/resubmit", requireFirebaseAuth, async (req, res) => {
     ...(patch.links ? { links: patch.links } : {}),
     ...(patch.blockers !== undefined
       ? { blockers: (patch.blockers ?? "").toString() }
+      : {}),
+    ...(patch.linkPitchDeck !== undefined
+      ? { linkPitchDeck: (patch.linkPitchDeck ?? "").toString() }
       : {}),
     ...(patch.progress !== undefined
       ? {
@@ -938,6 +945,7 @@ app.patch(
     if (patch.thisWeekGoals) fields.push("thisWeekGoals");
     if (patch.nextWeekGoals) fields.push("nextWeekGoals");
     if (patch.blockers !== undefined) fields.push("blockers");
+    if (patch.linkPitchDeck !== undefined) fields.push("linkPitchDeck");
     if (patch.progress !== undefined) fields.push("progress");
     if (patch.links) fields.push("links");
     if (fields.length === 0)
@@ -950,6 +958,10 @@ app.patch(
       ...(patch.links ? { links: patch.links } : {}),
       ...(patch.blockers !== undefined
         ? { blockers: (patch.blockers ?? "").toString() }
+        : {}),
+
+      ...(patch.linkPitchDeck !== undefined
+        ? { linkPitchDeck: (patch.linkPitchDeck ?? "").toString() }
         : {}),
       ...(patch.progress !== undefined
         ? {
@@ -1330,6 +1342,98 @@ async function isMeetingLockedForEdits(
   return latestSeq > sequence;
 }
 
+app.patch(
+  "/projects/:projectId/archive",
+  requireFirebaseAuth,
+  async (req, res) => {
+    try {
+      const u = await getCurrentUser(req);
+      if (!u?.id || !u.role)
+        return res.status(403).json({ error: "Missing user profile" });
+
+      const projectId = (req.params.projectId ?? "").toString().trim();
+      if (!projectId)
+        return res.status(400).json({ error: "projectId is required" });
+
+      const db = getFirestore();
+      const access = await canAccessProject(db, projectId, u.id, u.role);
+      if (!access.ok)
+        return res.status(access.status).json({ error: access.error });
+
+      await db
+        .collection("projects")
+        .doc(projectId)
+        .update({ isArchived: true });
+
+      return res.json({ ok: true, projectId });
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" ? e.message : "Unknown error";
+      // Firestore composite index required shows up as FAILED_PRECONDITION with a console link.
+      if (
+        msg.includes("FAILED_PRECONDITION") &&
+        msg.includes("requires an index")
+      ) {
+        return res.status(400).json({
+          error:
+            "Firestore index required for project query. Create the composite index, then retry.",
+          detail: msg,
+        });
+      }
+      // eslint-disable-next-line no-console
+      console.error("Archive project failed:", e);
+      return res
+        .status(500)
+        .json({ error: "Archive project failed", detail: msg });
+    }
+  },
+);
+
+app.patch(
+  "/projects/:projectId/restore",
+  requireFirebaseAuth,
+  async (req, res) => {
+    try {
+      const u = await getCurrentUser(req);
+      if (!u?.id || !u.role)
+        return res.status(403).json({ error: "Missing user profile" });
+
+      const projectId = (req.params.projectId ?? "").toString().trim();
+      if (!projectId)
+        return res.status(400).json({ error: "projectId is required" });
+
+      const db = getFirestore();
+      const access = await canAccessProject(db, projectId, u.id, u.role);
+      if (!access.ok)
+        return res.status(access.status).json({ error: access.error });
+
+      await db
+        .collection("projects")
+        .doc(projectId)
+        .update({ isArchived: false });
+
+      return res.json({ ok: true, projectId });
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" ? e.message : "Unknown error";
+      // Firestore composite index required shows up as FAILED_PRECONDITION with a console link.
+      if (
+        msg.includes("FAILED_PRECONDITION") &&
+        msg.includes("requires an index")
+      ) {
+        return res.status(400).json({
+          error:
+            "Firestore index required for project query. Create the composite index, then retry.",
+          detail: msg,
+        });
+      }
+      // eslint-disable-next-line no-console
+      console.error("Restore project failed:", e);
+      return res
+        .status(500)
+        .json({ error: "Restore project failed", detail: msg });
+    }
+  },
+);
+
 app.post(
   "/projects/:projectId/meetings",
   requireFirebaseAuth,
@@ -1345,11 +1449,13 @@ app.post(
 
       const body = (req.body ?? {}) as {
         advisorId?: unknown;
+        meetingVenue?: unknown;
         inheritFromLatest?: unknown;
         proposedAt?: unknown;
       };
       const advisorId = normalizeAdvisorId(body.advisorId);
       const inheritFromLatest = Boolean(body.inheritFromLatest);
+      const meetingVenue = body.meetingVenue;
       let proposedAt: string | null = null;
       if (body.proposedAt === null || body.proposedAt === "") proposedAt = null;
       else if (typeof body.proposedAt === "string" && body.proposedAt.trim()) {
@@ -1425,6 +1531,7 @@ app.post(
         id,
         projectId,
         advisorId,
+        meetingVenue,
         sequence: nextSeq,
         status: "draft",
         inheritedFromMeetingId,
@@ -1538,7 +1645,11 @@ app.patch("/meetings/:id/details", requireFirebaseAuth, async (req, res) => {
   if (!access.ok)
     return res.status(access.status).json({ error: access.error });
 
-  const raw = (req.body ?? {}) as { proposedAt?: unknown };
+  const raw = (req.body ?? {}) as {
+    proposedAt?: unknown;
+    meetingVenue?: unknown;
+  };
+
   let proposedAt: string | null | undefined;
   if ("proposedAt" in raw) {
     if (raw.proposedAt === null || raw.proposedAt === "") proposedAt = null;
@@ -1552,9 +1663,23 @@ app.patch("/meetings/:id/details", requireFirebaseAuth, async (req, res) => {
     }
   }
 
+  let meetingVenue: string | null | undefined;
+  if ("meetingVenue" in raw) {
+    if (raw.meetingVenue === null) {
+      meetingVenue = null;
+    } else if (typeof raw.meetingVenue === "string") {
+      const trimmed = raw.meetingVenue.trim();
+      meetingVenue = trimmed ? trimmed : null;
+    } else {
+      return res.status(400).json({ error: "Invalid meetingVenue" });
+    }
+  }
+
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { updatedAt: now, updatedBy: u.id };
   if (proposedAt !== undefined) patch.proposedAt = proposedAt;
+  if (meetingVenue !== undefined) patch.meetingVenue = meetingVenue;
+
   await ref.update(patch);
   return res.json({ ok: true });
 });

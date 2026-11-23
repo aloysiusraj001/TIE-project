@@ -109,8 +109,6 @@ const AdminDashboard = () => {
   const projectAdvisorCandidates = instructors;
   const students = users.filter((u) => u.role === "student");
 
-  console.log("projects", projects);
-
   const filteredProjects = useMemo(() => {
     if (!showArchivedProjects) {
       return projects.filter((m) => !m.isArchived);

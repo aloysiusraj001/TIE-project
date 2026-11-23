@@ -174,7 +174,7 @@ const Login = () => {
           "Signed in, but profile sync failed. Refresh the page or try again.",
         );
 
-        console.log("Error", e);
+        console.error("Error signInWithEmailLink", e);
 
         navigate("/");
         return;
@@ -183,7 +183,7 @@ const Login = () => {
 
       if (nameNewUser) {
         navigate("/student");
-        console.log("navigate /student");
+
         window.history.replaceState(
           {},
           document.title,
@@ -191,7 +191,6 @@ const Login = () => {
         );
       } else {
         navigate("/");
-        console.log("navigate /");
       }
     } catch (e) {
       const code = authErrorCode(e);
@@ -264,7 +263,7 @@ const Login = () => {
       );
       toast.success("Check your inbox for the sign-in link.");
     } catch (e) {
-      console.log("e", e);
+      console.error("Error send magic link", e);
 
       const code =
         typeof e === "object" && e && "code" in e

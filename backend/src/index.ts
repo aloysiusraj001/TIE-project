@@ -1347,8 +1347,6 @@ app.patch(
   requireFirebaseAuth,
   async (req, res) => {
     try {
-      console.log("archive");
-
       const u = await getCurrentUser(req);
       if (!u?.id || !u.role)
         return res.status(403).json({ error: "Missing user profile" });
@@ -1356,7 +1354,7 @@ app.patch(
       const projectId = (req.params.projectId ?? "").toString().trim();
       if (!projectId)
         return res.status(400).json({ error: "projectId is required" });
-      console.log("projectId", projectId);
+
       const db = getFirestore();
       const access = await canAccessProject(db, projectId, u.id, u.role);
       if (!access.ok)
@@ -1366,8 +1364,6 @@ app.patch(
         .collection("projects")
         .doc(projectId)
         .update({ isArchived: true });
-
-      console.log("archive end");
 
       return res.json({ ok: true, projectId });
     } catch (e: any) {
@@ -1397,8 +1393,6 @@ app.patch(
   requireFirebaseAuth,
   async (req, res) => {
     try {
-      console.log("restore");
-
       const u = await getCurrentUser(req);
       if (!u?.id || !u.role)
         return res.status(403).json({ error: "Missing user profile" });
@@ -1406,7 +1400,7 @@ app.patch(
       const projectId = (req.params.projectId ?? "").toString().trim();
       if (!projectId)
         return res.status(400).json({ error: "projectId is required" });
-      console.log("projectId", projectId);
+
       const db = getFirestore();
       const access = await canAccessProject(db, projectId, u.id, u.role);
       if (!access.ok)
@@ -1416,8 +1410,6 @@ app.patch(
         .collection("projects")
         .doc(projectId)
         .update({ isArchived: false });
-
-      console.log("restore end");
 
       return res.json({ ok: true, projectId });
     } catch (e: any) {
